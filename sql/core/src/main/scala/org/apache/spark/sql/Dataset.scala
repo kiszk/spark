@@ -2162,7 +2162,14 @@ class Dataset[T] private[sql](
   @Experimental
   @InterfaceStability.Evolving
   def filter(func: T => Boolean): Dataset[T] = {
-    withTypedPlan(TypedFilter(func, logicalPlan))
+    val res = ClosureToExpressionConverter.convert(func, schema).map { expr =>
+      println(s"inferred expression is $expr")
+      where(Column.apply(Cast(expr, BooleanType)))
+    }.getOrElse {
+      withTypedPlan(TypedFilter(func, logicalPlan))
+    }
+    println(res.queryExecution)
+    res
   }
 
   /**
