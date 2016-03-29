@@ -1901,11 +1901,19 @@ class Dataset[T] private[sql](
    */
   @Experimental
   def filter(func: T => Boolean): Dataset[T] = {
-    val deserialized = CatalystSerde.deserialize[T](logicalPlan)
-    val function = Literal.create(func, ObjectType(classOf[T => Boolean]))
-    val condition = Invoke(function, "apply", BooleanType, deserialized.output)
-    val filter = Filter(condition, deserialized)
-    withTypedPlan(CatalystSerde.serialize[T](filter))
+    val res = ClosureToExpressionConverter.convert(func, schema).map { expr =>
+      println(s"inferred expression is $expr")
+      where(Column.apply(Cast(expr, BooleanType)))
+    }.getOrElse {
+      val deserialized = CatalystSerde.deserialize[T](logicalPlan)
+      val function = Literal.create(func, ObjectType(classOf[T => Boolean]))
+      val condition = Invoke(function, "apply", BooleanType, deserialized.output)
+      val filter = Filter(condition, deserialized)
+      withTypedPlan(CatalystSerde.serialize[T](filter))
+    }
+    println(res.queryExecution)
+    res
+>>>>>>> Extremely hacky end-to-end filter example.
   }
 
   /**
