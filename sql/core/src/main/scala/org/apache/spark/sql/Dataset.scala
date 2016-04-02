@@ -1901,9 +1901,8 @@ class Dataset[T] private[sql](
    */
   @Experimental
   def filter(func: T => Boolean): Dataset[T] = {
-    val res = ClosureToExpressionConverter.convert(func, schema).map { expr =>
-      println(s"inferred expression is $expr")
-      where(Column.apply(Cast(expr, BooleanType)))
+    val res = ClosureToExpressionConverter.convertFilter(func, schema).map { expr =>
+      where(Column(expr))
     }.getOrElse {
       val deserialized = CatalystSerde.deserialize[T](logicalPlan)
       val function = Literal.create(func, ObjectType(classOf[T => Boolean]))
