@@ -1912,7 +1912,6 @@ class Dataset[T] private[sql](
     }
     println(res.queryExecution)
     res
->>>>>>> Extremely hacky end-to-end filter example.
   }
 
   /**
