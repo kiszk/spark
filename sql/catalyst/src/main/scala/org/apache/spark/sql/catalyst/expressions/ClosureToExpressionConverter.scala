@@ -394,16 +394,17 @@ case class CheckCast(left: Expression, right: Expression)
     }
   }
 
-  override def genCode(ctx: CodegenContext, ev: ExprCode): String = {
-    val eval = left.gen(ctx)
-    val castToTypeName = right.gen(ctx)
-    s"""
+  override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
+    val eval = left.genCode(ctx)
+    val castToTypeName = right.genCode(ctx)
+    val castCode = s"""
       ${eval.code}
       ${castToTypeName.code}
       (${castToTypeName.value})(${eval.value});
       boolean ${ev.isNull} = ${eval.isNull};
       ${ctx.javaType(dataType)} ${ev.value} = ${eval.value};
       """
+    ev.copy(code = eval.code + castCode)
   }
 }
 
@@ -421,12 +422,13 @@ case class NPEOnNull(child: Expression) extends UnaryExpression with NonSQLExpre
     result
   }
 
-  override def genCode(ctx: CodegenContext, ev: ExprCode): String = {
-    val eval = child.gen(ctx)
-    s"""
+  override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
+    val eval = child.genCode(ctx)
+    val npeCode = s"""
       ${eval.code}
       if(${eval.isNull}) { throw new NullPointerException(); }
       ${ctx.javaType(dataType)} ${ev.value} = ${eval.value};
       """
+    ev.copy(code = eval.code + npeCode)
   }
 }
