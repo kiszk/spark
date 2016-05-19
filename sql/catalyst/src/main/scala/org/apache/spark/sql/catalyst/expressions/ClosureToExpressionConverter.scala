@@ -20,6 +20,8 @@
 
 package org.apache.spark.sql.catalyst.expressions
 
+import javassist.ClassClassPath
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.{ExprCode, CodegenContext}
@@ -29,7 +31,7 @@ import org.apache.spark.util.Utils
 
 import scala.collection.mutable
 
-import javassist.{Modifier, ClassPool, CtMethod}
+import javassist.{Modifier, ClassPool, CtMethod, NotFoundException}
 import javassist.bytecode.Opcode._
 import javassist.bytecode.{ConstPool, InstructionPrinter}
 import javassist.bytecode.analysis.Analyzer
@@ -352,7 +354,9 @@ object ClosureToExpressionConverter {
   // TODO: handle argument types
   // For now, this assumes f: Row => Expr
   def convert(closure: Object, schema: StructType): Option[Expression] = try {
-    val ctClass = classPool.get(closure.getClass.getName)
+    val clazz = closure.getClass
+    classPool.insertClassPath(new ClassClassPath(clazz))
+    val ctClass = classPool.get(clazz.getName)
     val applyMethods = ctClass.getMethods.filter(_.getName == "apply")
     // Take the first apply() method which can be resolved to an expression
     applyMethods.flatMap { method =>
@@ -367,7 +371,7 @@ object ClosureToExpressionConverter {
     }.headOption
   } catch {
     // Fall back to a regular path
-    case e: Exception => None
+    case e: NotFoundException => None
   }
 
   def convertFilter(closure: Object, schema: StructType): Option[Expression] = {
