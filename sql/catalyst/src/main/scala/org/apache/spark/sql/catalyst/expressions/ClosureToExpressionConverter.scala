@@ -50,8 +50,10 @@ object ClosureToExpressionConverter extends Logging {
       children: Seq[Expression],
       initExprs: Map[String, Expression] = Map.empty,
       stackHeightAtEntry: Int = 0,
-      pos: Int = 0): Option[Expression] = {
+      pos: Int = 0,
+      level: Int = 0): Option[Expression] = {
     logDebug("-" * 80)
+    logDebug(s"level: ${level}")
     logDebug(s"method: ${method.getLongName}")
     logDebug(s"children: ${children}")
     logDebug("-" * 80)
@@ -72,11 +74,10 @@ object ClosureToExpressionConverter extends Logging {
 
     if (log.isDebugEnabled) {
       val codes = method.getMethodInfo().getCodeAttribute.iterator()
-      var index = 0
       while (codes.hasNext) {
-        val code = InstructionPrinter.instructionString(codes, codes.next(), constPool)
-        logDebug(s"${index}: ${code}")
-        index = index + 1
+        val pos = codes.next()
+        val code = InstructionPrinter.instructionString(codes, pos, constPool)
+        logDebug(s"${pos}: ${code}")
       }
     }
 
@@ -115,16 +116,16 @@ object ClosureToExpressionConverter extends Logging {
       val pos = instructions.next()
       val op = instructions.byteAt(pos)
       logDebug("*" * 20 + " " + InstructionPrinter.instructionString(instructions, pos, constPool)
-        + s" (stack = $stackHeight) " + "*" * 20)
+        + s" (pos=$pos, stack=$stackHeight, level=$level) " + "*" * 20)
 
       // How the stack will grow after this op code:
       // For example, I2L (convert an int into a long) will pop a value from stack and push
       // its result into it. So the grown number is 0.
       val stackGrow: Int = {
         op match {
-          case INVOKEVIRTUAL => -1 * getInvokeMethodTarget(pos).getParameterTypes.length
-          case INVOKESTATIC => -1 * getInvokeMethodTarget(pos).getParameterTypes.length
-          case INVOKEINTERFACE => -1 * getInvokeInterfaceTarget(pos).getParameterTypes.length
+          // case INVOKEVIRTUAL => -1 * getInvokeMethodTarget(pos).getParameterTypes.length
+          // case INVOKESTATIC => -1 * getInvokeMethodTarget(pos).getParameterTypes.length
+          // case INVOKEINTERFACE => -1 * getInvokeInterfaceTarget(pos).getParameterTypes.length
           case LDC2_W => 1 // TODO: in reality, this pushes 2; this is a hack.
           case GETFIELD => 1 // hack
           case LCONST_0 | LCONST_1 => 1 // hack
@@ -154,14 +155,16 @@ object ClosureToExpressionConverter extends Logging {
           children,
           exprs.toMap,
           stackHeight + stackGrow,
-          trueJumpTarget)
+          trueJumpTarget,
+          level)
         val falseExpression = analyzeMethod(
           method,
           schema,
           children,
           exprs.toMap,
           stackHeight + stackGrow,
-          instructions.next())
+          instructions.next(),
+          level)
         if (trueExpression.isDefined && falseExpression.isDefined) {
           Some(If(compOp(value1, value2), trueExpression.get, falseExpression.get))
         } else {
@@ -178,14 +181,16 @@ object ClosureToExpressionConverter extends Logging {
           children,
           exprs.toMap,
           stackHeight + stackGrow,
-          trueJumpTarget)
+          trueJumpTarget,
+          level + 1)
         val falseExpression = analyzeMethod(
           method,
           schema,
           children,
           exprs.toMap,
           stackHeight + stackGrow,
-          instructions.next())
+          instructions.next(),
+          level + 1)
         if (trueExpression.isDefined && falseExpression.isDefined) {
           Some(If(compOp(stackHead), trueExpression.get, falseExpression.get))
         } else {
@@ -221,7 +226,7 @@ object ClosureToExpressionConverter extends Logging {
         // we directly fetch 2 bytes here.
         case GOTO =>
           val target = instructions.s16bitAt(pos + 1) + pos
-          return analyzeMethod(method, schema, children, exprs.toMap, stackHeight, target)
+          return analyzeMethod(method, schema, children, exprs.toMap, stackHeight, target, level)
 
         // convert an int into a byte
         case I2B => Cast(stackHead, ByteType)
@@ -255,7 +260,8 @@ object ClosureToExpressionConverter extends Logging {
 
         // if stackHeadMinus1 is less than or equal to stackHead,
         // branch to instruction at branchoffset = [pos + 1] << 8 + [pos + 2]
-        case IF_ICMPLE => return analyzeCMP(stackHeadMinus1, stackHead, LessThanOrEqual)
+        case IF_ICMPLE =>
+          return analyzeCMP(stackHeadMinus1, stackHead, LessThanOrEqual)
         // if stackHeadMinus1 and stackHead are not equal,
         // branch to instruction at branchoffset = [pos + 1] << 8 + [pos + 2]
         case IF_ICMPNE =>
@@ -270,8 +276,8 @@ object ClosureToExpressionConverter extends Logging {
         case IFLT => return analyzeCMP(stackHead, Literal(0), (e1, e2) => LessThan(e1, e2))
         case IFLE => return analyzeCMP(stackHead, Literal(0), (e1, e2) => LessThanOrEqual(e1, e2))
         case IFEQ => return analyzeCMP(stackHead, Literal(0), (e1, e2) => EqualTo(e1, e2))
-        case IFNONNULL => return analyzeIFNull((e) => IsNull(e))
-        case IFNULL => return analyzeIFNull((e) => IsNotNull(e))
+        case IFNONNULL => return analyzeIFNull((e) => IsNotNull(e))
+        case IFNULL => return analyzeIFNull((e) => IsNull(e))
 
         case CHECKCAST =>
           val cp_index = instructions.u16bitAt(pos + 1)
@@ -288,11 +294,11 @@ object ClosureToExpressionConverter extends Logging {
               val fieldNumber = stackHead.asInstanceOf[Literal].value.asInstanceOf[Int]
               IsNull(UnresolvedAttribute(schema.fields(fieldNumber).name))
             } else {
-              throw new Exception("")
+              throw new Exception("TODO: error message")
             }
           } else {
             // TODO: error message
-            throw new Exception("")
+            throw new Exception("TODO: error message")
           }
 
         case INVOKESTATIC =>
@@ -301,10 +307,10 @@ object ClosureToExpressionConverter extends Logging {
           val attributes =
             (stackHeight + 1 - numParameters until stackHeight + 1).map(i => exprs(stack(i)))
           assert(attributes.length == numParameters)
-          analyzeMethod(target, schema, attributes) match {
+          analyzeMethod(target, schema, attributes, level = level + 1) match {
             case Some(expr) => expr
             case None =>
-              throw new Exception("ERROR: Problem analyzing static method call")
+              throw new Exception("problem analyzing static method call")
           }
 
         case INVOKEVIRTUAL =>
@@ -312,33 +318,54 @@ object ClosureToExpressionConverter extends Logging {
           val numParameters = target.getParameterTypes.length
           val attributes = (stackHeight - numParameters to stackHeight).map(i => exprs(stack(i)))
           assert(attributes.length == numParameters + 1)
-          if (target.getDeclaringClass.getName == classOf[Tuple2[_, _]].getName) {
-            if (target.getName == "_2$mcI$sp") {
-              UnresolvedAttribute("_2")
-            } else {
-              throw new Exception(s"Error: unknown target $target")
-            }
-          } else {
-            analyzeMethod(target, schema, attributes) match {
-              case Some(expr) => expr
-              case None =>
-                throw new Exception("ERROR: Problem analyzing method call")
-            }
+          target.getDeclaringClass.getName match {
+            case cls: String if cls.startsWith("scala.Tuple") =>
+              target.getName match {
+                case field: String if field.matches("^_[12]?[0-9]$") =>
+                  UnresolvedAttribute(field)
+                // `Tuple2` matches this case
+                case field: String if field.matches("^_[12]?[0-9]\\$mcI\\$sp$") =>
+                  UnresolvedAttribute(field.replace("$mcI$sp", ""))
+                case _ =>
+                  throw new Exception(s"unknown target ${target.getName}")
+              }
+            case _ =>
+              analyzeMethod(target, schema, attributes, level = level + 1) match {
+                case Some(expr) => expr
+                case None =>
+                  throw new Exception("problem analyzing method call")
+              }
           }
 
         case GETFIELD =>
           val target = classPool.get(constPool.getFieldrefClassName(instructions.u16bitAt(pos + 1)))
           val targetField = constPool.getFieldrefName(instructions.u16bitAt(pos + 1))
-          if (target.getName == "scala.Tuple2") {
-            UnresolvedAttribute(targetField)
-          } else {
-            throw new Exception(s"ERROR: Unknown GETFIELD target: ${target.getName}")
+          target.getName match {
+            case cls: String if cls.startsWith("scala.Tuple") =>
+              UnresolvedAttribute(targetField)
+            // TODO: Since `stackGrow` has 1 here, this op generates duplicated entries in the stack
+            case cls: String if Seq("java.lang.Integer", "java.lang.Double").contains(cls) =>
+              exprs(stack(stackHeight))
+            case _ =>
+              throw new Exception(s"unknown GETFIELD target: ${target.getName}")
           }
+
+        case GETSTATIC =>
+          val target = classPool.get(constPool.getFieldrefClassName(instructions.u16bitAt(pos + 1)))
+          val targetField = constPool.getFieldrefName(instructions.u16bitAt(pos + 1))
+          if (target.getName == "java.lang.Boolean") {
+            Literal(java.lang.Boolean.valueOf(targetField))
+          } else {
+            throw new Exception(s"unknown GETSTATIC target: ${target.getName}")
+          }
+
         case DRETURN | IRETURN | LRETURN | ARETURN =>
           return Some(exprs(stack(stackHeight)))
+
         case _ =>
-          throw new Exception(s"ERROR: Unknown opcode $op");
+          throw new Exception(s"unknown opcode $op");
       }
+
       stackHeight += stackGrow
 
       if (log.isDebugEnabled) {
@@ -347,6 +374,7 @@ object ClosureToExpressionConverter extends Logging {
         }
       }
     }
+
     throw new Exception("oh no!")
   }
 
@@ -373,7 +401,7 @@ object ClosureToExpressionConverter extends Logging {
   } catch {
     // Fall back to a regular path
     case e: Exception =>
-      logInfo({e.getMessage})
+      logInfo(s"failed to convert into exprs because ${e.getMessage}")
       None
   }
 
