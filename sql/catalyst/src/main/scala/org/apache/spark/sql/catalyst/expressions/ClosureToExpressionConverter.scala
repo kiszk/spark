@@ -351,7 +351,7 @@ object ClosureToExpressionConverter {
 
   // TODO: handle argument types
   // For now, this assumes f: Row => Expr
-  def convert(closure: Object, schema: StructType): Option[Expression] = {
+  def convert(closure: Object, schema: StructType): Option[Expression] = try {
     val ctClass = classPool.get(closure.getClass.getName)
     val applyMethods = ctClass.getMethods.filter(_.getName == "apply")
     // Take the first apply() method which can be resolved to an expression
@@ -365,6 +365,9 @@ object ClosureToExpressionConverter {
         analyzeMethod(method, schema, Seq(UnresolvedAttribute("this")) ++ attributes)
       }
     }.headOption
+  } catch {
+    // Fall back to a regular path
+    case e: Exception => None
   }
 
   def convertFilter(closure: Object, schema: StructType): Option[Expression] = {
