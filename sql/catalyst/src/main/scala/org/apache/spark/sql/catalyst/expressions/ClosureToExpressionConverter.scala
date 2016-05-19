@@ -22,6 +22,7 @@ package org.apache.spark.sql.catalyst.expressions
 
 import javassist.ClassClassPath
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.codegen.{ExprCode, CodegenContext}
@@ -31,14 +32,14 @@ import org.apache.spark.util.Utils
 
 import scala.collection.mutable
 
-import javassist.{Modifier, ClassPool, CtMethod, NotFoundException}
+import javassist.{Modifier, ClassPool, CtMethod}
 import javassist.bytecode.Opcode._
 import javassist.bytecode.{ConstPool, InstructionPrinter}
 import javassist.bytecode.analysis.Analyzer
 
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 
-object ClosureToExpressionConverter {
+object ClosureToExpressionConverter extends Logging {
 
   val analyzer = new Analyzer()
   val classPool = ClassPool.getDefault
@@ -50,10 +51,10 @@ object ClosureToExpressionConverter {
       initExprs: Map[String, Expression] = Map.empty,
       stackHeightAtEntry: Int = 0,
       pos: Int = 0): Option[Expression] = {
-    println("-" * 80)
-    println(method.getName)
-    println(children)
-    println("-" * 80)
+    logDebug("-" * 80)
+    logDebug(s"method: ${method.getLongName}")
+    logDebug(s"children: ${children}")
+    logDebug("-" * 80)
 
     // Expression map: key is stack value name. value is the Catalyst expression used to
     // create the stack value.
@@ -69,10 +70,13 @@ object ClosureToExpressionConverter {
     instructions.move(pos)
     val constPool = method.getMethodInfo.getConstPool
 
-    {
-      val i = method.getMethodInfo().getCodeAttribute.iterator()
-      while (i.hasNext) {
-        println(InstructionPrinter.instructionString(i, i.next(), constPool))
+    if (log.isDebugEnabled) {
+      val codes = method.getMethodInfo().getCodeAttribute.iterator()
+      var index = 0
+      while (codes.hasNext) {
+        val code = InstructionPrinter.instructionString(codes, codes.next(), constPool)
+        logDebug(s"${index}: ${code}")
+        index = index + 1
       }
     }
 
@@ -110,8 +114,8 @@ object ClosureToExpressionConverter {
       // Fetch next op code
       val pos = instructions.next()
       val op = instructions.byteAt(pos)
-      val mnemonic = InstructionPrinter.instructionString(instructions, pos, constPool)
-      println("*" * 20 + " " + mnemonic + s" (stack = $stackHeight) " + "*" * 20)
+      logDebug("*" * 20 + " " + InstructionPrinter.instructionString(instructions, pos, constPool)
+        + s" (stack = $stackHeight) " + "*" * 20)
 
       // How the stack will grow after this op code:
       // For example, I2L (convert an int into a long) will pop a value from stack and push
@@ -284,11 +288,11 @@ object ClosureToExpressionConverter {
               val fieldNumber = stackHead.asInstanceOf[Literal].value.asInstanceOf[Int]
               IsNull(UnresolvedAttribute(schema.fields(fieldNumber).name))
             } else {
-              return None
+              throw new Exception("")
             }
           } else {
             // TODO: error message
-            return None
+            throw new Exception("")
           }
 
         case INVOKESTATIC =>
@@ -300,8 +304,7 @@ object ClosureToExpressionConverter {
           analyzeMethod(target, schema, attributes) match {
             case Some(expr) => expr
             case None =>
-              println("ERROR: Problem analyzing static method call")
-              return None
+              throw new Exception("ERROR: Problem analyzing static method call")
           }
 
         case INVOKEVIRTUAL =>
@@ -313,15 +316,13 @@ object ClosureToExpressionConverter {
             if (target.getName == "_2$mcI$sp") {
               UnresolvedAttribute("_2")
             } else {
-              println(s"Error: unknown target $target")
-              return None
+              throw new Exception(s"Error: unknown target $target")
             }
           } else {
             analyzeMethod(target, schema, attributes) match {
               case Some(expr) => expr
               case None =>
-                println("ERROR: Problem analyzing method call")
-                return None
+                throw new Exception("ERROR: Problem analyzing method call")
             }
           }
 
@@ -331,19 +332,19 @@ object ClosureToExpressionConverter {
           if (target.getName == "scala.Tuple2") {
             UnresolvedAttribute(targetField)
           } else {
-            println(s"ERROR: Unknown GETFIELD target: $target")
-            return None
+            throw new Exception(s"ERROR: Unknown GETFIELD target: ${target.getName}")
           }
         case DRETURN | IRETURN | LRETURN | ARETURN =>
           return Some(exprs(stack(stackHeight)))
         case _ =>
-          println(s"ERROR: Unknown opcode $mnemonic")
-          return None
+          throw new Exception(s"ERROR: Unknown opcode $op");
       }
       stackHeight += stackGrow
 
-      exprs.toSeq.sortBy(_._1).foreach { case (label, value) =>
-        println(s"    $label = $value")
+      if (log.isDebugEnabled) {
+        exprs.toSeq.sortBy(_._1).foreach { case (label, value) =>
+          logDebug(s"  $label = $value")
+        }
       }
     }
     throw new Exception("oh no!")
@@ -360,7 +361,7 @@ object ClosureToExpressionConverter {
     val applyMethods = ctClass.getMethods.filter(_.getName == "apply")
     // Take the first apply() method which can be resolved to an expression
     applyMethods.flatMap { method =>
-      println(" \n  " * 10)
+      logDebug(" \n  " * 10)
       assert(method.getParameterTypes.length == 1)
       val attributes = Seq(UnresolvedAttribute("inputRow"))
       if (isStatic(method)) {
@@ -371,7 +372,9 @@ object ClosureToExpressionConverter {
     }.headOption
   } catch {
     // Fall back to a regular path
-    case e: NotFoundException => None
+    case e: Exception =>
+      logInfo({e.getMessage})
+      None
   }
 
   def convertFilter(closure: Object, schema: StructType): Option[Expression] = {
