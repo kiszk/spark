@@ -1910,7 +1910,6 @@ class Dataset[T] private[sql](
       val filter = Filter(condition, deserialized)
       withTypedPlan(CatalystSerde.serialize[T](filter))
     }
-    // println(res.queryExecution)
     res
   }
 
