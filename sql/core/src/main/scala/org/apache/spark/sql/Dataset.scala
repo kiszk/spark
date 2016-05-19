@@ -2167,7 +2167,7 @@ class Dataset[T] private[sql](
     }.getOrElse {
       withTypedPlan(TypedFilter(func, logicalPlan))
     }
-    println(res.queryExecution)
+    // println(res.queryExecution)
     res
   }
 
