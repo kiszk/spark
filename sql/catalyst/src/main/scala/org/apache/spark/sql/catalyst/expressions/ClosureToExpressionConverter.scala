@@ -163,6 +163,17 @@ object ClosureToExpressionConverter extends Logging {
         case ALOAD_0 => stack.push(children(0))
         case ALOAD_1 => stack.push(children(1))
         case ALOAD_2 => stack.push(children(2))
+        case ALOAD_3 => stack.push(children(3))
+
+        case ASTORE_0 =>
+        case ASTORE_1 =>
+        case ASTORE_2 =>
+        case ASTORE_3 =>
+
+        case DLOAD_0 => stack.push(children(0))
+        case DLOAD_1 => stack.push(children(1))
+        case DLOAD_2 => stack.push(children(2))
+        case DLOAD_3 => stack.push(children(3))
 
         // push a byte onto the stack as an integer value
         case BIPUSH => stack.push(Literal(instructions.byteAt(pos + 1))) // TODO: byte must be sign-extended into an integer value?
@@ -247,6 +258,10 @@ object ClosureToExpressionConverter extends Logging {
           val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
           return analyzeCMP(stackHeadMinus1, stackHead, (e1, e2) => Not(EqualTo(e1, e2)))
 
+        case DCMPL =>
+          val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
+          stack.push(Subtract(stackHeadMinus1, stackHead))
+
         // if stack.pop is not 0, branch to instruction at branchoffset = [pos + 1] << 8 + [pos + 2]
         // the foillowing branching ops follow the same sematics.
         case IFNE => return analyzeCMP(stack.pop, Literal(0), (e1, e2) => Not(EqualTo(e1, e2)))
@@ -287,10 +302,17 @@ object ClosureToExpressionConverter extends Logging {
           val target = getInvokeMethodTarget(pos)
           val numParameters = target.getParameterTypes.length
           val attributes = (0 until numParameters).map(i => stack.pop)
-          analyzeMethod(target, schema, attributes, level = level + 1) match {
-            case Some(expr) => stack.push(expr)
-            case None =>
-              throw new Exception("problem analyzing static method call")
+          // TODO: Map some math functions into expressions.mathExpressions.*
+          if (target.getName == "sqrt") {
+            stack.push(Sqrt(attributes(0)))
+          } else if (target.getName == "log10") {
+            stack.push(Log10(attributes(0)))
+          } else {
+            analyzeMethod(target, schema, attributes, level = level + 1) match {
+              case Some(expr) => stack.push(expr)
+              case None =>
+                throw new Exception("problem analyzing static method call")
+            }
           }
 
         case INVOKEVIRTUAL =>
@@ -381,6 +403,10 @@ object ClosureToExpressionConverter extends Logging {
     case e: Exception =>
       logInfo(s"failed to convert into exprs because ${e.getMessage}")
       None
+  }
+
+  def convertMap(closure: Object, schema: StructType): Option[Expression] = {
+    convert(closure, schema)
   }
 
   def convertFilter(closure: Object, schema: StructType): Option[Expression] = {
