@@ -2198,13 +2198,7 @@ class Dataset[T] private[sql](
   @Experimental
   @InterfaceStability.Evolving
   def map[U : Encoder](func: T => U): Dataset[U] = withTypedPlan {
-    if (sparkSession.sessionState.conf.closureConverter) {
-      ClosureToExpressionConverter.convertMap(func, schema).map { expr =>
-        MapExprElements[T, U](expr, logicalPlan)
-      }.getOrElse { MapElements[T, U](func, logicalPlan) }
-    } else {
-      MapElements[T, U](func, logicalPlan)
-    }
+    MapElements[T, U](func, logicalPlan)
   }
 
   /**

@@ -375,7 +375,7 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
           data, objAttr, planLater(child)) :: Nil
       case logical.MapElements(f, _, _, objAttr, child) =>
         execution.MapElementsExec(f, objAttr, planLater(child)) :: Nil
-      case logical.MapExprElements(mapExpr, objAttr, child) =>
+      case logical.MapExprElements(mapExpr: Expression, objAttr, child) =>
         execution.MapExprElementsExec(mapExpr, objAttr, planLater(child)) :: Nil
       case logical.AppendColumns(f, _, _, in, out, child) =>
         execution.AppendColumnsExec(f, in, out, planLater(child)) :: Nil

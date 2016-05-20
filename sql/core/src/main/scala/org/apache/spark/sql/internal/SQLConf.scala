@@ -377,6 +377,11 @@ object SQLConf {
     .booleanConf
     .createWithDefault(false)
 
+  val CLOSURE_CONVERTER = buildConf("spark.sql.closure.convertToExpr")
+    .doc("TODO: need to write")
+    .booleanConf
+    .createWithDefault(false)
+
   val ORDER_BY_ORDINAL = buildConf("spark.sql.orderByOrdinal")
     .doc("When true, the ordinal numbers are treated as the position in the select list. " +
          "When false, the ordinal numbers in order/sort by clause are ignored.")
@@ -445,6 +450,7 @@ object SQLConf {
     .booleanConf
     .createWithDefault(true)
 
+<<<<<<< 9eeeace850916cb26bd6de5644bad48d91a7a205
   val CLOSURE_CONVERTER_ENABLED = buildConf("spark.sql.closure.convertToExprs")
     .internal()
     .doc("TODO: Need to write")
@@ -452,6 +458,9 @@ object SQLConf {
     .createWithDefault(false)
 
   val WHOLESTAGE_CODEGEN_ENABLED = buildConf("spark.sql.codegen.wholeStage")
+=======
+  val WHOLESTAGE_CODEGEN_ENABLED = SQLConfigBuilder("spark.sql.codegen.wholeStage")
+>>>>>>> Add closure conversion rules in Analyzer
     .internal()
     .doc("When true, the whole stage (of multiple operators) will be compiled into single java" +
       " method.")
@@ -786,8 +795,6 @@ private[sql] class SQLConf extends Serializable with CatalystConf with Logging {
 
   def optimizerMetadataOnly: Boolean = getConf(OPTIMIZER_METADATA_ONLY)
 
-  def closureConverter: Boolean = getConf(CLOSURE_CONVERTER_ENABLED)
-
   def wholeStageEnabled: Boolean = getConf(WHOLESTAGE_CODEGEN_ENABLED)
 
   def wholeStageMaxNumFields: Int = getConf(WHOLESTAGE_MAX_NUM_FIELDS)
@@ -876,6 +883,8 @@ private[sql] class SQLConf extends Serializable with CatalystConf with Logging {
 
   def hiveThriftServerSingleSession: Boolean =
     getConf(StaticSQLConf.HIVE_THRIFT_SERVER_SINGLESESSION)
+
+  override def closureToExprConverter: Boolean = getConf(CLOSURE_CONVERTER)
 
   override def orderByOrdinal: Boolean = getConf(ORDER_BY_ORDINAL)
 

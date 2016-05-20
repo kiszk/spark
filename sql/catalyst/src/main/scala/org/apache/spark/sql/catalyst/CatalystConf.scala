@@ -25,6 +25,8 @@ import org.apache.spark.sql.catalyst.analysis._
  * Interface for configuration options used in the catalyst module.
  */
 trait CatalystConf {
+  def closureToExprConverter: Boolean
+
   def caseSensitiveAnalysis: Boolean
 
   def orderByOrdinal: Boolean
@@ -66,6 +68,7 @@ trait CatalystConf {
 /** A CatalystConf that can be used for local testing. */
 case class SimpleCatalystConf(
     caseSensitiveAnalysis: Boolean,
+    closureToExprConverter: Boolean = false,
     orderByOrdinal: Boolean = true,
     groupByOrdinal: Boolean = true,
     optimizerMaxIterations: Int = 100,

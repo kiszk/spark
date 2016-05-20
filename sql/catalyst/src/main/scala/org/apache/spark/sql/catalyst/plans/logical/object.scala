@@ -153,6 +153,7 @@ object MapElements {
       func: AnyRef,
       child: LogicalPlan): LogicalPlan = {
     val deserialized = CatalystSerde.deserialize[T](child)
+
     val mapped = MapElements(
       func,
       implicitly[Encoder[T]].clsTag.runtimeClass,
@@ -217,20 +218,8 @@ case class TypedFilter(
   }
 }
 
-object MapExprElements {
-  def apply[T : Encoder, U : Encoder](
-      mapExpression: Expression,
-      child: LogicalPlan): LogicalPlan = {
-    val mapped = MapExprElements(
-      mapExpression,
-      CatalystSerde.generateObjAttr[U],
-      child)
-    CatalystSerde.serialize[U](mapped)
-  }
-}
-
 case class MapExprElements(
-    mapExpression: Expression,
+    mapExpr: Expression,
     outputObjAttr: Attribute,
     child: LogicalPlan) extends UnaryNode with ObjectProducer
 
