@@ -217,6 +217,23 @@ case class TypedFilter(
   }
 }
 
+object MapExprElements {
+  def apply[T : Encoder, U : Encoder](
+      mapExpression: Expression,
+      child: LogicalPlan): LogicalPlan = {
+    val mapped = MapExprElements(
+      mapExpression,
+      CatalystSerde.generateObjAttr[U],
+      child)
+    CatalystSerde.serialize[U](mapped)
+  }
+}
+
+case class MapExprElements(
+    mapExpression: Expression,
+    outputObjAttr: Attribute,
+    child: LogicalPlan) extends UnaryNode with ObjectProducer
+
 /** Factory for constructing new `AppendColumn` nodes. */
 object AppendColumns {
   def apply[T : Encoder, U : Encoder](
