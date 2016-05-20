@@ -211,6 +211,26 @@ case class MapElementsExec(
   override def outputOrdering: Seq[SortOrder] = child.outputOrdering
 }
 
+case class MapExprElementsExec(
+    exprExpression: Expression,
+    outputObjAttr: Attribute,
+    child: SparkPlan) extends UnaryExecNode with ObjectOperator {
+
+  override def output: Seq[Attribute] = outputObjAttr :: Nil
+  override def producedAttributes: AttributeSet = AttributeSet(outputObjAttr)
+
+  override protected def doExecute(): RDD[InternalRow] = {
+    child.execute().mapPartitionsInternal { iter =>
+      val projection = new InterpretedProjection(exprExpression :: Nil, child.output)
+      val getObject = unwrapObjectFromRow(child.output.head.dataType)
+      val outputObject = wrapObjectToRow(outputObjAttr.dataType)
+      iter.map(row => outputObject(getObject(projection(row))))
+    }
+  }
+
+  override def outputOrdering: Seq[SortOrder] = child.outputOrdering
+}
+
 /**
  * Applies the given function to each input row, appending the encoded result at the end of the row.
  */

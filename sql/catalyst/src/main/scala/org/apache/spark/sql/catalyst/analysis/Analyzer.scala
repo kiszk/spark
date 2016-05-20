@@ -565,6 +565,9 @@ class Analyzer(
     def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperators {
       case p: LogicalPlan if !p.childrenResolved => p
 
+      case m: MapExprElements if !m.mapExpression.resolved =>
+        m.copy(mapExpression = resolveExpression(m.mapExpression, m.child))
+
       // If the projection list contains Stars, expand it.
       case p: Project if containsStar(p.projectList) =>
         p.copy(projectList = buildExpandedProjectList(p.projectList, p.child))
