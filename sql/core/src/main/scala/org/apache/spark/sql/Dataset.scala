@@ -1901,16 +1901,20 @@ class Dataset[T] private[sql](
    */
   @Experimental
   def filter(func: T => Boolean): Dataset[T] = {
-    val res = ClosureToExpressionConverter.convertFilter(func, schema).map { expr =>
-      where(Column(expr))
-    }.getOrElse {
+    def filterPlan(func: T => Boolean) = {
       val deserialized = CatalystSerde.deserialize[T](logicalPlan)
       val function = Literal.create(func, ObjectType(classOf[T => Boolean]))
       val condition = Invoke(function, "apply", BooleanType, deserialized.output)
       val filter = Filter(condition, deserialized)
       withTypedPlan(CatalystSerde.serialize[T](filter))
     }
-    res
+    if (sparkSession.sessionState.conf.closureConverter) {
+      ClosureToExpressionConverter.convertFilter(func, schema).map { expr =>
+        where(Column(expr))
+      }.getOrElse { filterPlan(func) }
+    } else {
+      filterPlan(func)
+    }
   }
 
   /**
