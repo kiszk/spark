@@ -2162,12 +2162,15 @@ class Dataset[T] private[sql](
   @Experimental
   @InterfaceStability.Evolving
   def filter(func: T => Boolean): Dataset[T] = {
-    val res = ClosureToExpressionConverter.convertFilter(func, schema).map { expr =>
-      where(Column(expr))
-    }.getOrElse {
+    if (sparkSession.sessionState.conf.closureConverter) {
+      ClosureToExpressionConverter.convertFilter(func, schema).map { expr =>
+        where(Column(expr))
+      }.getOrElse {
+        withTypedPlan(TypedFilter(func, logicalPlan))
+      }
+    } else {
       withTypedPlan(TypedFilter(func, logicalPlan))
     }
-    res
   }
 
   /**

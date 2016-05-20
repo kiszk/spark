@@ -445,6 +445,12 @@ object SQLConf {
     .booleanConf
     .createWithDefault(true)
 
+  val CLOSURE_CONVERTER_ENABLED = buildConf("spark.sql.closure.convertToExprs")
+    .internal()
+    .doc("TODO: Need to write")
+    .booleanConf
+    .createWithDefault(false)
+
   val WHOLESTAGE_CODEGEN_ENABLED = buildConf("spark.sql.codegen.wholeStage")
     .internal()
     .doc("When true, the whole stage (of multiple operators) will be compiled into single java" +
@@ -779,6 +785,8 @@ private[sql] class SQLConf extends Serializable with CatalystConf with Logging {
   def gatherFastStats: Boolean = getConf(GATHER_FASTSTAT)
 
   def optimizerMetadataOnly: Boolean = getConf(OPTIMIZER_METADATA_ONLY)
+
+  def closureConverter: Boolean = getConf(CLOSURE_CONVERTER_ENABLED)
 
   def wholeStageEnabled: Boolean = getConf(WHOLESTAGE_CODEGEN_ENABLED)
 

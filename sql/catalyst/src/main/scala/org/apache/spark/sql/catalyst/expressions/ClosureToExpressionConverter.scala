@@ -108,23 +108,6 @@ object ClosureToExpressionConverter extends Logging {
 
       // TODO: check supports, ops and #parameters
 
-      // How the stack will grow after this op code:
-      // For example, I2L (convert an int into a long) will pop a value from stack and push
-      // its result into it. So the grown number is 0.
-      val stackGrow: Int = {
-        op match {
-          // case INVOKEVIRTUAL => 1 - getInvokeMethodTarget(pos).getParameterTypes.length
-          // case INVOKESTATIC => 1 - getInvokeMethodTarget(pos).getParameterTypes.length
-          // case INVOKEINTERFACE => 1 - getInvokeInterfaceTarget(pos).getParameterTypes.length
-          case LDC2_W => 1 // TODO: in reality, this pushes 2; this is a hack.
-          case GETFIELD => 1 // hack
-          case LCONST_0 | LCONST_1 => 1 // hack
-          case LADD | DADD | LMUL | DMUL => -1
-          case I2B | I2C | I2F | I2S | I2L | I2D => 0 // hack
-          case _ => STACK_GROW(op) // pre-defined stack grow in javassist
-        }
-      }
-
       def analyzeCMP(
           value1: Expression,
           value2: Expression,
