@@ -1901,20 +1901,11 @@ class Dataset[T] private[sql](
    */
   @Experimental
   def filter(func: T => Boolean): Dataset[T] = {
-    def filterPlan(func: T => Boolean) = {
-      val deserialized = CatalystSerde.deserialize[T](logicalPlan)
-      val function = Literal.create(func, ObjectType(classOf[T => Boolean]))
-      val condition = Invoke(function, "apply", BooleanType, deserialized.output)
-      val filter = Filter(condition, deserialized)
-      withTypedPlan(CatalystSerde.serialize[T](filter))
-    }
-    if (sparkSession.sessionState.conf.closureConverter) {
-      ClosureToExpressionConverter.convertFilter(func, schema).map { expr =>
-        where(Column(expr))
-      }.getOrElse { filterPlan(func) }
-    } else {
-      filterPlan(func)
-    }
+    val deserialized = CatalystSerde.deserialize[T](logicalPlan)
+    val function = Literal.create(func, ObjectType(classOf[T => Boolean]))
+    val condition = Invoke(function, "apply", BooleanType, deserialized.output)
+    val filter = Filter(condition, deserialized)
+    withTypedPlan(CatalystSerde.serialize[T](filter))
   }
 
   /**
@@ -1944,13 +1935,7 @@ class Dataset[T] private[sql](
    */
   @Experimental
   def map[U : Encoder](func: T => U): Dataset[U] = withTypedPlan {
-    if (sparkSession.sessionState.conf.closureConverter) {
-      ClosureToExpressionConverter.convertMap(func, schema).map { expr =>
-        MapExprElements[T, U](expr, logicalPlan)
-      }.getOrElse { MapElements[T, U](func, logicalPlan) }
-    } else {
-      MapElements[T, U](func, logicalPlan)
-    }
+    MapElements[T, U](func, logicalPlan)
   }
 
   /**

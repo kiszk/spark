@@ -348,6 +348,11 @@ object SQLConf {
     .booleanConf
     .createWithDefault(true)
 
+  val CLOSURE_CONVERTER = SQLConfigBuilder("spark.sql.closure.convertToExpr")
+    .doc("TODO: need to write")
+    .booleanConf
+    .createWithDefault(false)
+
   val ORDER_BY_ORDINAL = SQLConfigBuilder("spark.sql.orderByOrdinal")
     .doc("When true, the ordinal numbers are treated as the position in the select list. " +
          "When false, the ordinal numbers in order/sort By clause are ignored.")
@@ -410,12 +415,6 @@ object SQLConf {
     .doc("When true, we could use `datasource`.`path` as table in SQL query.")
     .booleanConf
     .createWithDefault(true)
-
-  val CLOSURE_CONVERTER_ENABLED = SQLConfigBuilder("spark.sql.closure.convertToExprs")
-    .internal()
-    .doc("TODO: Need to write")
-    .booleanConf
-    .createWithDefault(false)
 
   val WHOLESTAGE_CODEGEN_ENABLED = SQLConfigBuilder("spark.sql.codegen.wholeStage")
     .internal()
@@ -590,8 +589,6 @@ private[sql] class SQLConf extends Serializable with CatalystConf with Logging {
 
   def nativeView: Boolean = getConf(NATIVE_VIEW)
 
-  def closureConverter: Boolean = getConf(CLOSURE_CONVERTER_ENABLED)
-
   def wholeStageEnabled: Boolean = getConf(WHOLESTAGE_CODEGEN_ENABLED)
 
   def wholeStageMaxNumFields: Int = getConf(WHOLESTAGE_MAX_NUM_FIELDS)
@@ -663,6 +660,8 @@ private[sql] class SQLConf extends Serializable with CatalystConf with Logging {
   def warehousePath: String = {
     getConf(WAREHOUSE_PATH).replace("${system:user.dir}", System.getProperty("user.dir"))
   }
+
+  override def closureToExprConverter: Boolean = getConf(CLOSURE_CONVERTER)
 
   override def orderByOrdinal: Boolean = getConf(ORDER_BY_ORDINAL)
 

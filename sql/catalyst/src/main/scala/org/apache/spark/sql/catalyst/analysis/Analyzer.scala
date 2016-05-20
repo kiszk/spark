@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogRelation, InMemoryCatalog, 
 import org.apache.spark.sql.catalyst.encoders.OuterScopes
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate._
-import org.apache.spark.sql.catalyst.expressions.objects.NewInstance
+import org.apache.spark.sql.catalyst.expressions.objects.{Invoke, NewInstance}
 import org.apache.spark.sql.catalyst.optimizer.BooleanSimplification
 import org.apache.spark.sql.catalyst.planning.IntegerIndex
 import org.apache.spark.sql.catalyst.plans._
@@ -79,6 +79,8 @@ class Analyzer(
   val extendedResolutionRules: Seq[Rule[LogicalPlan]] = Nil
 
   lazy val batches: Seq[Batch] = Seq(
+    Batch("Preprocess", fixedPoint,
+      ClosureToExpression),
     Batch("Substitution", fixedPoint,
       CTESubstitution,
       WindowsSubstitution,
@@ -114,6 +116,27 @@ class Analyzer(
     Batch("Cleanup", fixedPoint,
       CleanupAliases)
   )
+
+  object ClosureToExpression extends Rule[LogicalPlan] {
+    def apply(plan: LogicalPlan): LogicalPlan = {
+      if (conf.closureToExprConverter) {
+        plan transform {
+          case f @ Filter(condition @ Invoke(func: Literal, _, _, _, _), child) =>
+            ClosureToExpressionConverter.convertFilter(
+              func.value.asInstanceOf[Object], f.child.schema).map { expr =>
+              f.copy(condition = expr)
+            }.getOrElse(f)
+
+          case m @ MapElements(func, outputObjAttr, DeserializeToObject(_, _, child)) =>
+            ClosureToExpressionConverter.convertMap(func, m.child.schema).map { expr =>
+              MapExprElements(expr, outputObjAttr, child)
+            }.getOrElse(m)
+        }
+      } else {
+        plan
+      }
+    }
+  }
 
   /**
    * Substitute child plan with cte definitions
@@ -565,8 +588,8 @@ class Analyzer(
     def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperators {
       case p: LogicalPlan if !p.childrenResolved => p
 
-      case m: MapExprElements if !m.mapExpression.resolved =>
-        m.copy(mapExpression = resolveExpression(m.mapExpression, m.child))
+      case m @ MapElements(mapExpr: Expression, _, child) if !mapExpr.resolved =>
+        m.copy(func = resolveExpression(mapExpr, child))
 
       // If the projection list contains Stars, expand it.
       case p: Project if containsStar(p.projectList) =>
