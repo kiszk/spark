@@ -224,7 +224,11 @@ case class MapExprElementsExec(
       val projection = new InterpretedProjection(exprExpression :: Nil, child.output)
       val getObject = unwrapObjectFromRow(child.output.head.dataType)
       val outputObject = wrapObjectToRow(outputObjAttr.dataType)
-      iter.map(row => outputObject(getObject(projection(row))))
+      // iter.map(row => outputObject(getObject(projection(row))))
+      iter.map(row => {
+        println(s"XXX:${row.numFields} -- ${row.getInt(0)}, ${row.getString(0)}")
+        outputObject(getObject(projection(row)))
+      })
     }
   }
 

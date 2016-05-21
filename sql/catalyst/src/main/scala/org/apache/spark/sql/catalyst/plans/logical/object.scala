@@ -72,7 +72,7 @@ trait ObjectProducer extends LogicalPlan {
  * The output of its child must be a single-field row containing the input object.
  */
 trait ObjectConsumer extends UnaryNode {
-  assert(child.output.length == 1)
+  // assert(child.output.length == 1)
 
   // This operator always need all columns of its child, even it doesn't reference to.
   override def references: AttributeSet = child.outputSet

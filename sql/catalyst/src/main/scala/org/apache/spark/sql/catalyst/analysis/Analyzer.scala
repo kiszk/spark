@@ -121,14 +121,15 @@ class Analyzer(
     def apply(plan: LogicalPlan): LogicalPlan = {
       if (conf.closureToExprConverter) {
         plan transform {
-          case f @ Filter(condition @ Invoke(func: Literal, _, _, _, _), child) =>
+          case SerializeFromObject(_, f @ Filter(condition @ Invoke(func: Literal, _, _, _, _),
+              DeserializeToObject(_, _, child))) =>
             ClosureToExpressionConverter.convertFilter(
-              func.value.asInstanceOf[Object], f.child.schema).map { expr =>
-              f.copy(condition = expr)
+              func.value.asInstanceOf[Object], child.schema).map { expr =>
+              f.copy(condition = expr, child = child)
             }.getOrElse(f)
 
           case m @ MapElements(func, outputObjAttr, DeserializeToObject(_, _, child)) =>
-            ClosureToExpressionConverter.convertMap(func, m.child.schema).map { expr =>
+            ClosureToExpressionConverter.convertMap(func, child.schema).map { expr =>
               MapExprElements(expr, outputObjAttr, child)
             }.getOrElse(m)
         }

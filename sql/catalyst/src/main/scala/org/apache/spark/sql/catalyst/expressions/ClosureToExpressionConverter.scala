@@ -47,14 +47,14 @@ object ClosureToExpressionConverter extends Logging {
   def analyzeMethod(
       method: CtMethod,
       schema: StructType,
-      children: Seq[Expression],
+      localVars: Array[Expression],
       stack: mutable.Stack[Expression] = mutable.Stack.empty[Expression],
       pos: Int = 0,
       level: Int = 0): Option[Expression] = {
     logDebug("-" * 80)
     logDebug(s"level: ${level}")
     logDebug(s"method: ${method.getLongName}")
-    logDebug(s"children: ${children}")
+    logDebug(s"localVars: ${localVars.toSeq}")
     logDebug("-" * 80)
 
     val instructions = method.getMethodInfo().getCodeAttribute.iterator()
@@ -116,14 +116,14 @@ object ClosureToExpressionConverter extends Logging {
         val trueExpression = analyzeMethod(
           method,
           schema,
-          children,
+          localVars,
           stack,
           trueJumpTarget,
           level)
         val falseExpression = analyzeMethod(
           method,
           schema,
-          children,
+          localVars,
           stack,
           instructions.next(),
           level)
@@ -136,23 +136,24 @@ object ClosureToExpressionConverter extends Logging {
 
       def analyzeIFNull(
           compOp: (Expression) => Predicate): Option[Expression] = {
+        val cmp = stack.pop
         val trueJumpTarget = instructions.s16bitAt(pos + 1) + pos
         val trueExpression = analyzeMethod(
           method,
           schema,
-          children,
+          localVars,
           stack,
           trueJumpTarget,
           level)
         val falseExpression = analyzeMethod(
           method,
           schema,
-          children,
+          localVars,
           stack,
           instructions.next(),
           level)
         if (trueExpression.isDefined && falseExpression.isDefined) {
-          Some(If(compOp(stack.pop), trueExpression.get, falseExpression.get))
+          Some(If(compOp(cmp), trueExpression.get, falseExpression.get))
         } else {
           None
         }
@@ -160,23 +161,41 @@ object ClosureToExpressionConverter extends Logging {
 
       op match {
         // load a reference onto the stack from local variable {0, 1, 2}
-        case ALOAD_0 => stack.push(children(0))
-        case ALOAD_1 => stack.push(children(1))
-        case ALOAD_2 => stack.push(children(2))
-        case ALOAD_3 => stack.push(children(3))
+        case ALOAD_0 => stack.push(localVars(0))
+        case ALOAD_1 => stack.push(localVars(1))
+        case ALOAD_2 => stack.push(localVars(2))
+        case ALOAD_3 => stack.push(localVars(3))
 
-        case ASTORE_0 =>
-        case ASTORE_1 =>
-        case ASTORE_2 =>
-        case ASTORE_3 =>
+        case ASTORE_0 => localVars(0) = stack.pop
+        case ASTORE_1 => localVars(1) = stack.pop
+        case ASTORE_2 => localVars(2) = stack.pop
+        case ASTORE_3 => localVars(3) = stack.pop
 
-        case DLOAD_0 => stack.push(children(0))
-        case DLOAD_1 => stack.push(children(1))
-        case DLOAD_2 => stack.push(children(2))
-        case DLOAD_3 => stack.push(children(3))
+        // load an int value from local variable {0, 1, 2}
+        case ILOAD_0 => stack.push(localVars(0))
+        case ILOAD_1 => stack.push(localVars(1))
+        case ILOAD_2 => stack.push(localVars(2))
+        case ILOAD_3 => stack.push(localVars(3))
+
+        case LLOAD_0 => stack.push(localVars(0))
+        case LLOAD_1 => stack.push(localVars(1))
+        case LLOAD_2 => stack.push(localVars(2))
+        case LLOAD_3 => stack.push(localVars(2))
+
+        case FLOAD_0 => stack.push(localVars(0))
+        case FLOAD_1 => stack.push(localVars(1))
+        case FLOAD_2 => stack.push(localVars(2))
+        case FLOAD_3 => stack.push(localVars(3))
+
+        case DLOAD_0 => stack.push(localVars(0))
+        case DLOAD_1 => stack.push(localVars(1))
+        case DLOAD_2 => stack.push(localVars(2))
+        case DLOAD_3 => stack.push(localVars(3))
 
         // push a byte onto the stack as an integer value
-        case BIPUSH => stack.push(Literal(instructions.byteAt(pos + 1))) // TODO: byte must be sign-extended into an integer value?
+        case BIPUSH =>
+          // TODO: byte must be sign-extended into an integer value?
+          stack.push(Literal(instructions.byteAt(pos + 1)))
 
         // load the int value {0, 1, ..} onto the stack
         case ICONST_0 => stack.push(Literal(0))
@@ -184,21 +203,24 @@ object ClosureToExpressionConverter extends Logging {
         case ICONST_2 => stack.push(Literal(2))
         case ICONST_3 => stack.push(Literal(3))
         case ICONST_4 => stack.push(Literal(4))
+        case ICONST_5 => stack.push(Literal(5))
 
         // push the long {0, 1} onto the stack
         case LCONST_0 => stack.push(Literal(0L))
         case LCONST_1 => stack.push(Literal(1L))
 
-        // load an int value from local variable {0, 1, 2}
-        case ILOAD_0 => stack.push(children(0))
-        case ILOAD_1 => stack.push(children(1))
-        case ILOAD_2 => stack.push(children(2))
+        case FCONST_0 => stack.push(Literal(0.0f))
+        case FCONST_1 => stack.push(Literal(1.0f))
+        case FCONST_2 => stack.push(Literal(2.0f))
+
+        case DCONST_0 => stack.push(Literal(0.0d))
+        case DCONST_1 => stack.push(Literal(1.0d))
 
         // goes to another instruction at branchoffset: byte at [pos + 1] << 8 + byte at [pos + 2].
         // we directly fetch 2 bytes here.
         case GOTO =>
           val target = instructions.s16bitAt(pos + 1) + pos
-          return analyzeMethod(method, schema, children, stack, target, level)
+          return analyzeMethod(method, schema, localVars, stack, target, level)
 
         // convert an int into a byte
         case I2B => stack.push(Cast(stack.pop, ByteType))
@@ -212,6 +234,14 @@ object ClosureToExpressionConverter extends Logging {
         case I2L => stack.push(Cast(stack.pop, LongType))
         // convert an int into a short
         case I2S => stack.push(Cast(stack.pop, ShortType))
+
+        case L2D => stack.push(Cast(stack.pop, DoubleType))
+        case L2F => stack.push(Cast(stack.pop, FloatType))
+        case L2I => stack.push(Cast(stack.pop, IntegerType))
+
+        case F2D => stack.push(Cast(stack.pop, DoubleType))
+        case F2I => stack.push(Cast(stack.pop, IntegerType))
+        case F2L => stack.push(Cast(stack.pop, LongType))
 
         // multiply two integers/longs/floats/doubles
         case IMUL | LMUL | FMUL | DMUL =>
@@ -246,17 +276,45 @@ object ClosureToExpressionConverter extends Logging {
         // In JVM, this pushes two words onto the stack, but we're going to only push one.
         case LDC2_W => stack.push(Literal(ldcw(pos)))
 
+        case IF_ICMPGE =>
+          val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
+          return analyzeCMP(stackHeadMinus1, stackHead, GreaterThanOrEqual)
+
+        case IF_ICMPGT =>
+          val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
+          return analyzeCMP(stackHeadMinus1, stackHead, GreaterThan)
+
         // if stack.popMinus1 is less than or equal to stack.pop,
         // branch to instruction at branchoffset = [pos + 1] << 8 + [pos + 2]
         case IF_ICMPLE =>
           val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
           return analyzeCMP(stackHeadMinus1, stackHead, LessThanOrEqual)
 
+        case IF_ICMPLT =>
+          val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
+          return analyzeCMP(stackHeadMinus1, stackHead, LessThan)
+
         // if stack.popMinus1 and stack.pop are not equal,
         // branch to instruction at branchoffset = [pos + 1] << 8 + [pos + 2]
         case IF_ICMPNE =>
           val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
           return analyzeCMP(stackHeadMinus1, stackHead, (e1, e2) => Not(EqualTo(e1, e2)))
+
+        case LCMP =>
+          val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
+          stack.push(Subtract(stackHeadMinus1, stackHead))
+
+        case FCMPG =>
+          val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
+          stack.push(Subtract(stackHead, stackHeadMinus1))
+
+        case FCMPL =>
+          val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
+          stack.push(Subtract(stackHeadMinus1, stackHead))
+
+        case DCMPG =>
+          val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
+          stack.push(Subtract(stackHead, stackHeadMinus1))
 
         case DCMPL =>
           val (stackHead, stackHeadMinus1) = (stack.pop, stack.pop)
@@ -279,6 +337,8 @@ object ClosureToExpressionConverter extends Logging {
           val className = constPool.getClassInfo(cp_index)
           stack.push(CheckCast(stack.pop, Literal(className)))
 
+        case ARRAYLENGTH => stack.push(Length(stack.pop))
+
         case INVOKEINTERFACE =>
           val target = getInvokeInterfaceTarget(pos)
           if (target.getDeclaringClass.getName == classOf[Row].getName) {
@@ -291,50 +351,69 @@ object ClosureToExpressionConverter extends Logging {
               val fieldNumber = stackHead.asInstanceOf[Literal].value.asInstanceOf[Int]
               stack.push(IsNull(UnresolvedAttribute(schema.fields(fieldNumber).name)))
             } else {
-              throw new Exception("TODO: error message")
+              logInfo("TODO: error message")
+              return None
             }
           } else {
             // TODO: error message
-            throw new Exception("TODO: error message")
+            logInfo("TODO: error message")
+            return None
           }
 
         case INVOKESTATIC =>
           val target = getInvokeMethodTarget(pos)
-          val numParameters = target.getParameterTypes.length
-          val attributes = (0 until numParameters).map(i => stack.pop)
           // TODO: Map some math functions into expressions.mathExpressions.*
           if (target.getName == "sqrt") {
-            stack.push(Sqrt(attributes(0)))
+            stack.push(Sqrt(stack.pop))
           } else if (target.getName == "log10") {
-            stack.push(Log10(attributes(0)))
+            stack.push(Log10(stack.pop))
           } else {
-            analyzeMethod(target, schema, attributes, level = level + 1) match {
-              case Some(expr) => stack.push(expr)
+            val localVars = new Array[Expression](4)
+            val numParameters = target.getParameterTypes.length
+            for (i <- 0 until numParameters) {
+              localVars(i) = stack(i)
+            }
+            analyzeMethod(target, schema, localVars, level = level + 1) match {
+              case Some(expr) =>
+                // Drop used entries in the stack
+                (0 until numParameters).map(_ => stack.pop)
+                stack.push(expr)
               case None =>
-                throw new Exception("problem analyzing static method call")
+                logInfo("problem analyzing static method call")
+                return None
             }
           }
 
         case INVOKEVIRTUAL =>
           val target = getInvokeMethodTarget(pos)
           val numParameters = target.getParameterTypes.length
-          val attributes = (0 to numParameters).map(i => stack.pop)
           target.getDeclaringClass.getName match {
             case cls: String if cls.startsWith("scala.Tuple") =>
+              // Drop used entries in the stack
+              (0 to numParameters).map(_ => stack.pop)
               target.getName match {
-                case field: String if field.matches("^_[12]?[0-9]$") =>
-                  stack.push(UnresolvedAttribute(field))
-                // `Tuple2` matches this case
-                case field: String if field.matches("^_[12]?[0-9]\\$mcI\\$sp$") =>
-                  stack.push(UnresolvedAttribute(field.replace("$mcI$sp", "")))
+                case field: String if field.matches("^_[12]?[0-9].*$") =>
+                  // Remove an unnecessary suffix in case of `Tuple2`
+                  val name = field.replace("$mcI$sp", "")
+                  stack.push(UnresolvedAttribute(name))
                 case _ =>
-                  throw new Exception(s"unknown target ${target.getName}")
+                  logInfo(s"unknown target ${target.getName}")
+                  return None
               }
             case _ =>
-              analyzeMethod(target, schema, attributes, level = level + 1) match {
-                case Some(expr) => stack.push(expr)
+              val localVars = new Array[Expression](4)
+              localVars(0) = stack.top // Set objectref
+              for (i <- 0 until numParameters) {
+                localVars(i + 1) = stack(i)
+              }
+              analyzeMethod(target, schema, localVars, level = level + 1) match {
+                case Some(expr) =>
+                  // Drop used entries in the stack
+                  (0 to numParameters).map(_ => stack.pop)
+                  stack.push(expr)
                 case None =>
-                  throw new Exception("problem analyzing method call")
+                  logInfo("problem analyzing method call")
+                  return None
               }
           }
 
@@ -344,11 +423,12 @@ object ClosureToExpressionConverter extends Logging {
           target.getName match {
             case cls: String if cls.startsWith("scala.Tuple") =>
               stack.push(UnresolvedAttribute(targetField))
-              // TODO: Since `stackGrow` has 1 here, this op generates duplicated entries in the stack
-            case cls: String if Seq("java.lang.Integer", "java.lang.Double").contains(cls) =>
-              // Do nothing
+            case cls: String if Seq("java.lang.String", "java.lang.Short", "java.lang.Integer",
+                "java.lang.Long", "java.lang.Float", "java.lang.Double").contains(cls) =>
+              // Do nothing here
             case _ =>
-              throw new Exception(s"unknown GETFIELD target: ${target.getName}")
+              logInfo(s"unknown GETFIELD target: ${target.getName}")
+              return None
           }
 
         case GETSTATIC =>
@@ -357,14 +437,16 @@ object ClosureToExpressionConverter extends Logging {
           if (target.getName == "java.lang.Boolean") {
             stack.push(Literal(java.lang.Boolean.valueOf(targetField)))
           } else {
-            throw new Exception(s"unknown GETSTATIC target: ${target.getName}")
+            logInfo(s"unknown GETSTATIC target: ${target.getName}")
+            return None
           }
 
-        case DRETURN | IRETURN | LRETURN | ARETURN =>
-          return Some(stack.pop)
+        case DRETURN | FRETURN | IRETURN | LRETURN | ARETURN =>
+          return Some(stack.top)
 
         case _ =>
-          throw new Exception(s"unknown opcode $op");
+          logInfo(s"unknown opcode $op");
+          return None
       }
 
       if (log.isDebugEnabled()) {
@@ -374,10 +456,21 @@ object ClosureToExpressionConverter extends Logging {
       }
     }
 
-    throw new Exception("oh no!")
+    logInfo("oh no!")
+    return None
   }
 
   def isStatic(method: CtMethod): Boolean = Modifier.isStatic(method.getModifiers)
+
+  // We assume the max number of local vars is 4
+  private def toLocalVars(exprs: Expression*) = {
+    assert(exprs.size <= 4)
+    val vars = new Array[Expression](4)
+    exprs.zipWithIndex.map { case (expr, i) =>
+        vars(i) = exprs(i)
+    }
+    vars
+  }
 
   // TODO: handle argument types
   // For now, this assumes f: Row => Expression
@@ -386,18 +479,22 @@ object ClosureToExpressionConverter extends Logging {
     classPool.insertClassPath(new ClassClassPath(clazz))
     val ctClass = classPool.get(clazz.getName)
     val applyMethods = ctClass.getMethods.filter(_.getName == "apply")
-    // Take the first apply() method which can be resolved to an expression
-    applyMethods.headOption.flatMap { method =>
-      // logDebug(" \n  " * 10)
+    // Take the apply() that has the minimum number of converted expressions
+    applyMethods.flatMap { method =>
+      logDebug(" \n  " * 10)
       assert(method.getParameterTypes.length == 1)
-      // This expr is not actually used for a final output
-      val attributes = Seq(UnresolvedAttribute("input"))
-      if (isStatic(method)) {
-        analyzeMethod(method, schema, attributes)
+      val expr = if (isStatic(method)) {
+        analyzeMethod(method, schema, toLocalVars(UnresolvedAttribute("value")))
       } else {
-        analyzeMethod(method, schema, Seq(UnresolvedAttribute("this")) ++ attributes)
+        analyzeMethod(method, schema, toLocalVars(UnresolvedAttribute("this"),
+          UnresolvedAttribute("value")))
       }
-    }
+      expr.map { e =>
+        val numExpr = e.collect { case e => true }.size
+        logInfo(s"numExpr:${numExpr} expr:${e}")
+        (numExpr, e)
+      }
+    }.sortBy(_._1).map(_._2).headOption
   } catch {
     // Fall back to a regular path
     case e: Exception =>
