@@ -212,21 +212,34 @@ case class MapElementsExec(
 }
 
 case class MapExprElementsExec(
-    exprExpression: Expression,
+    mapExpr: Expression,
     outputObjAttr: Attribute,
-    child: SparkPlan) extends UnaryExecNode with ObjectOperator {
+    child: SparkPlan) extends UnaryExecNode with ObjectOperator with CodegenSupport {
 
   override def output: Seq[Attribute] = outputObjAttr :: Nil
   override def producedAttributes: AttributeSet = AttributeSet(outputObjAttr)
 
+  override def inputRDDs(): Seq[RDD[InternalRow]] = {
+    child.asInstanceOf[CodegenSupport].inputRDDs()
+  }
+  
+  protected override def doProduce(ctx: CodegenContext): String = {
+    child.asInstanceOf[CodegenSupport].produce(ctx, this)
+  }
+  
+  override def doConsume(ctx: CodegenContext, input: Seq[ExprCode], row: ExprCode): String = {
+    val cExpr = ExpressionCanonicalizer.execute(BindReferences.bindReference(mapExpr, child.output))
+    ctx.currentVars = input
+    consume(ctx, cExpr.genCode(ctx) :: Nil)
+  }
+
   override protected def doExecute(): RDD[InternalRow] = {
     child.execute().mapPartitionsInternal { iter =>
-      val projection = new InterpretedProjection(exprExpression :: Nil, child.output)
+      val projection = new InterpretedProjection(mapExpr :: Nil, child.output)
       val getObject = unwrapObjectFromRow(child.output.head.dataType)
       val outputObject = wrapObjectToRow(outputObjAttr.dataType)
       // iter.map(row => outputObject(getObject(projection(row))))
       iter.map(row => {
-        println(s"XXX:${row.numFields} -- ${row.getInt(0)}, ${row.getString(0)}")
         outputObject(getObject(projection(row)))
       })
     }
