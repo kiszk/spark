@@ -29,6 +29,7 @@ class ClosureToExpressionConverterBenchmark extends SparkFunSuite {
     .master("local[1]")
     .appName("benchmark")
     .config("spark.sql.codegen.wholeStage", true)
+    .config("spark.sql.closure.convertToExpr", true)
     .getOrCreate()
 
   type RowType = Tuple6[Short, Int, Long, Float, Double, String]
@@ -36,7 +37,7 @@ class ClosureToExpressionConverterBenchmark extends SparkFunSuite {
   val testSchema = ExpressionEncoder[RowType]().schema
 
   def doMicroBenchmark(numIters: Int): Benchmark = {
-    val benchmark = new Benchmark("closure-to-exprs microbenchmarks", 1)
+    val benchmark = new Benchmark("closure-to-exprs microbenchmarks", numIters)
 
     benchmark.addCase("boolean") { iter =>
       for (i <- 0 until numIters) {
@@ -71,17 +72,17 @@ class ClosureToExpressionConverterBenchmark extends SparkFunSuite {
   def doSimpleBenchmark(numIters: Int): Benchmark = {
     import sparkSession.implicits._
 
-    val benchmark = new Benchmark("end-to-end benchmark", 1)
-    val ds = sparkSession.range(1, 1000000)
+    val benchmark = new Benchmark("end-to-end benchmark", numIters)
+    val df = sparkSession.range(1, 10000000000L)
       .select(($"id" % 3).as("a"), ($"id" % 5).as("b"), ($"id" % 7).as("c"))
     val name = "a * b + c"
     val func = {
-      val temp = ds.map(d => d.getLong(0) + d.getLong(1) + d.getLong(2))
+      val temp = df.map(d => d.getLong(0) * d.getLong(1) + d.getLong(2))
+      temp.explain
       temp.queryExecution.toRdd.foreach(_ => Unit)
     }
-
     benchmark.addCase(s"$name: closure.convertToExpr off", numIters) { iter =>
-      sparkSession.conf.set("spark.sql.closure.convertToExpr", value = false)
+      sparkSession.conf.set("spark.sql.closure.convertToExpr", value = true)
       func
     }
     benchmark.addCase(s"$name: closure.convertToExpr on", numIters) { iter =>
@@ -92,29 +93,13 @@ class ClosureToExpressionConverterBenchmark extends SparkFunSuite {
   }
 
   test("closure-to-expr") {
-    val benchmark1 = doMicroBenchmark(100)
+    val benchmark1 = doMicroBenchmark(100000)
     val benchmark2 = doSimpleBenchmark(100)
 
-    /*
-    Java HotSpot(TM) 64-Bit Server VM 1.8.0_60-b27 on Mac OS X 10.11.4
-    Intel(R) Core(TM) i7-4960HQ CPU @ 2.60GHz
-    back-to-back map:                   Best/Avg Time(ms)    Rate(M/s)   Per Row(ns)   Relative
-    -------------------------------------------------------------------------------------------
-    RDD                                      1935 / 2105         51.7          19.3       1.0X
-    DataFrame                                 756 /  799        132.3           7.6       2.6X
-    Dataset                                  7359 / 7506         13.6          73.6       0.3X
-    */
+    // TODO: Write benchmark results
     benchmark1.run()
 
-    /*
-    Java HotSpot(TM) 64-Bit Server VM 1.8.0_60-b27 on Mac OS X 10.11.4
-    Intel(R) Core(TM) i7-4960HQ CPU @ 2.60GHz
-    back-to-back map:                   Best/Avg Time(ms)    Rate(M/s)   Per Row(ns)   Relative
-    -------------------------------------------------------------------------------------------
-    RDD                                      1935 / 2105         51.7          19.3       1.0X
-    DataFrame                                 756 /  799        132.3           7.6       2.6X
-    Dataset                                  7359 / 7506         13.6          73.6       0.3X
-    */
+    // TODO: Write benchmark results
     benchmark2.run()
   }
 }

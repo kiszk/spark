@@ -333,9 +333,12 @@ object ClosureToExpressionConverter extends Logging {
         case IFNULL => return analyzeIFNull((e) => IsNull(e))
 
         case CHECKCAST =>
-          val cp_index = instructions.u16bitAt(pos + 1)
-          val className = constPool.getClassInfo(cp_index)
-          stack.push(CheckCast(stack.pop, Literal(className)))
+          // TODO: Need this type-check for input data?
+          // It seems the type-check has already been done inside Dataset.
+
+          // val cp_index = instructions.u16bitAt(pos + 1)
+          // val className = constPool.getClassInfo(cp_index)
+          // stack.push(CheckCast(stack.pop, Literal(className)))
 
         case ARRAYLENGTH => stack.push(Length(stack.pop))
 
@@ -531,7 +534,7 @@ case class CheckCast(left: Expression, right: Expression)
     if (result.getClass.isAssignableFrom(castToType)) {
       result
     } else {
-      new ClassCastException
+      throw new ClassCastException
     }
   }
 
