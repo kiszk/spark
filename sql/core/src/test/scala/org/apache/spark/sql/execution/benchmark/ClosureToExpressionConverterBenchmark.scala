@@ -18,88 +18,55 @@
 package org.apache.spark.sql.execution.benchmark
 
 import org.apache.spark.SparkFunSuite
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.ClosureToExpressionConverter
 import org.apache.spark.util.Benchmark
 
 class ClosureToExpressionConverterBenchmark extends SparkFunSuite {
 
-  lazy val sparkSession = SparkSession.builder
-    .master("local[1]")
-    .appName("benchmark")
-    .config("spark.sql.codegen.wholeStage", true)
-    .config("spark.sql.closure.convertToExpr", true)
-    .getOrCreate()
-
   type RowType = Tuple6[Short, Int, Long, Float, Double, String]
 
   val testSchema = ExpressionEncoder[RowType]().schema
 
   def doMicroBenchmark(numIters: Int): Benchmark = {
-    val benchmark = new Benchmark("closure-to-exprs microbenchmarks", numIters)
+    val benchmark = new Benchmark("closure-to-exprs benchmarks", 1L, defaultNumIters = numIters)
 
     benchmark.addCase("boolean") { iter =>
-      for (i <- 0 until numIters) {
-        ClosureToExpressionConverter.convert(
-          (i: RowType) => i._1 == 4,
-          testSchema
-        ).get
-      }
+      ClosureToExpressionConverter.convert(
+        (i: RowType) => i._1 == 4,
+        testSchema
+      ).getOrElse(throw new RuntimeException)
     }
 
     benchmark.addCase("arithmetic") { iter =>
-      for (i <- 0 until numIters) {
-        ClosureToExpressionConverter.convert(
-          (i: RowType) => i._1 + i._2 * i._2 + (i._3 / i._3) * i._2,
-          testSchema
-        ).get
-      }
+      ClosureToExpressionConverter.convert(
+        (i: RowType) => i._1 + Math.sqrt(i._2 * i._2) + (i._3 / i._3) * i._2,
+        testSchema
+      ).getOrElse(throw new RuntimeException)
     }
 
     benchmark.addCase("simple branch") { iter =>
-      for (i <- 0 until numIters) {
-        ClosureToExpressionConverter.convert(
-          (i: RowType) => i._1 + (if (i._5 > 1.0) i._2 else i._3),
-          testSchema
-        ).get
-      }
+      ClosureToExpressionConverter.convert(
+        (i: RowType) => i._1 + (if (i._5 > 1.0) i._2 else i._3),
+        testSchema
+      ).getOrElse(throw new RuntimeException)
     }
 
     benchmark
   }
 
-  def doSimpleBenchmark(numIters: Int): Benchmark = {
-    import sparkSession.implicits._
-
-    val benchmark = new Benchmark("end-to-end benchmark", numIters)
-    val df = sparkSession.range(1, 10000000000L)
-      .select(($"id" % 3).as("a"), ($"id" % 5).as("b"), ($"id" % 7).as("c"))
-    val name = "a * b + c"
-    val func = {
-      val temp = df.map(d => d.getLong(0) * d.getLong(1) + d.getLong(2))
-      temp.explain
-      temp.queryExecution.toRdd.foreach(_ => Unit)
-    }
-    benchmark.addCase(s"$name: closure.convertToExpr off", numIters) { iter =>
-      sparkSession.conf.set("spark.sql.closure.convertToExpr", value = true)
-      func
-    }
-    benchmark.addCase(s"$name: closure.convertToExpr on", numIters) { iter =>
-      sparkSession.conf.set("spark.sql.closure.convertToExpr", value = true)
-      func
-    }
-    benchmark
-  }
-
+  // Check the conversion overhead is small
   test("closure-to-expr") {
-    val benchmark1 = doMicroBenchmark(100000)
-    val benchmark2 = doSimpleBenchmark(100)
+    val benchmark = doMicroBenchmark(10000)
 
-    // TODO: Write benchmark results
-    benchmark1.run()
-
-    // TODO: Write benchmark results
-    benchmark2.run()
+    // Java HotSpot(TM) 64-Bit Server VM 1.8.0_31-b13 on Mac OS X 10.10.2
+    // Intel(R) Core(TM) i7-4578U CPU @ 3.00GHz
+    //
+    // closure-to-exprs benchmarks:    Best/Avg Time(ms)    Rate(M/s)   Per Row(ns)   Relative
+    // ----------------------------------------------------------------------------------------
+    // boolean                                  0 /    1          0.0      295753.0       1.0X
+    // arithmetic                               1 /    2          0.0     1236260.0       0.2X
+    // simple branch                            1 /    1          0.0      990534.0       0.3X
+    benchmark.run()
   }
 }
