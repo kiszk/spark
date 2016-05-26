@@ -222,11 +222,11 @@ case class MapExprElementsExec(
   override def inputRDDs(): Seq[RDD[InternalRow]] = {
     child.asInstanceOf[CodegenSupport].inputRDDs()
   }
-  
+
   protected override def doProduce(ctx: CodegenContext): String = {
     child.asInstanceOf[CodegenSupport].produce(ctx, this)
   }
-  
+
   override def doConsume(ctx: CodegenContext, input: Seq[ExprCode], row: ExprCode): String = {
     val cExpr = ExpressionCanonicalizer.execute(BindReferences.bindReference(mapExpr, child.output))
     ctx.currentVars = input
@@ -238,7 +238,6 @@ case class MapExprElementsExec(
       val projection = new InterpretedProjection(mapExpr :: Nil, child.output)
       val getObject = unwrapObjectFromRow(child.output.head.dataType)
       val outputObject = wrapObjectToRow(outputObjAttr.dataType)
-      // iter.map(row => outputObject(getObject(projection(row))))
       iter.map(row => {
         outputObject(getObject(projection(row)))
       })

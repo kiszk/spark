@@ -365,7 +365,7 @@ class ClosureToExpressionConverterSuite extends SparkFunSuite with ExpressionEva
     checkIfConversion[Tuple3[Int, Int, String]](
       t => t._3.length > 2,
       LessThanOrEqual(
-          Length(CheckCast(UnresolvedAttribute("_3"), Literal("java.lang.String"))),
+          Length(UnresolvedAttribute("_3")),
         Literal(2))
     )
     checkIfConversion[Tuple4[Int, Int, Int, Double]](
@@ -373,7 +373,7 @@ class ClosureToExpressionConverterSuite extends SparkFunSuite with ExpressionEva
       LessThanOrEqual(Subtract(
           Sqrt(
             If(IsNotNull(UnresolvedAttribute("_4")),
-              CheckCast(UnresolvedAttribute("_4"), Literal("java.lang.Double")),
+              UnresolvedAttribute("_4"),
               Literal(0.0))),
           Literal(3.0)),
         Literal(0))
