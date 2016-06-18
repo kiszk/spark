@@ -575,3 +575,4 @@ final class GenericBooleanArrayData(private val primitiveArray: Array[Boolean])
     result
   }
 }
+
