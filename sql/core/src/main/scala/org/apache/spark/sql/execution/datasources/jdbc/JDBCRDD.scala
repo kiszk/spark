@@ -476,7 +476,7 @@ private[sql] class JDBCRDD(
                     throw new IllegalArgumentException("Nested arrays unsupported")
                   case _ => array.asInstanceOf[Array[Any]]
                 }
-                mutableRow.update(i, new GenericArrayData(data))
+                mutableRow.update(i, GenericArrayData.allocate(data))
               } else {
                 mutableRow.update(i, null)
               }
