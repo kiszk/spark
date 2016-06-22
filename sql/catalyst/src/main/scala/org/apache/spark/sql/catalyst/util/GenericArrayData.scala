@@ -24,7 +24,8 @@ import org.apache.spark.sql.types.{DataType, Decimal}
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 
 object GenericArrayData {
-  def allocate(seq: Seq[Any]): GenericArrayData = new GenericRefArrayData(seq)
+  def allocate(array: Array[Any]): GenericRefArrayData = new GenericRefArrayData(array)
+  def allocate(seq: Seq[Any]): GenericRefArrayData = new GenericRefArrayData(seq)
   def allocate(list: java.util.List[Any]): GenericRefArrayData = new GenericRefArrayData(list)
   def allocate(seqOrArray: Any): GenericRefArrayData = new GenericRefArrayData(seqOrArray)
   def allocate(primitiveArray: Array[Int]): GenericIntArrayData =
@@ -95,7 +96,6 @@ final class GenericRefArrayData(val array: Array[Any]) extends GenericArrayData 
   def this(seqOrArray: Any) = this(seqOrArray match {
     case seq: Seq[Any] => seq
     case array: Array[_] => array.toSeq
-    case _ => Seq.empty
   })
 
   override def copy(): GenericRefArrayData = new GenericRefArrayData(array.clone())
