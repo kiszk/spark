@@ -126,6 +126,9 @@ final class GenericRefArrayData(val array: Array[Any]) extends GenericArrayData 
     }
 
     val other = o.asInstanceOf[GenericArrayData]
+    if (other eq null) {
+      return false;
+    }
 
     val len = numElements()
     if (len != other.numElements()) {
@@ -215,6 +218,9 @@ final class GenericIntArrayData(val primitiveArray: Array[Int]) extends GenericA
     }
 
     val other = o.asInstanceOf[GenericIntArrayData]
+    if (other eq null) {
+      return false;
+    }
 
     java.util.Arrays.equals(primitiveArray, other.primitiveArray)
   }
