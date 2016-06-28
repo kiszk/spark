@@ -849,7 +849,7 @@ case class Cast(child: Expression, dataType: DataType) extends UnaryExpression w
           val boxedTypeTo = ctx.primitiveTypeName(javaDTTo)
           s"""
            final ${javaDTTo}[] $values = $c.to${boxedTypeTo}Array();
-           $evPrim = new $arrayClass($values);
+           $evPrim = $arrayClass.allocate($values);
          """
         } else {
           s"""
@@ -862,7 +862,7 @@ case class Cast(child: Expression, dataType: DataType) extends UnaryExpression w
                  "false", toElementPrim, toElementNull, toType, elementCast)}
              $values[$j] = $toElementPrim;
            }
-           $evPrim = new $arrayClass($values);
+           $evPrim = $arrayClass.allocate($values);
          """
         }
       } else {
