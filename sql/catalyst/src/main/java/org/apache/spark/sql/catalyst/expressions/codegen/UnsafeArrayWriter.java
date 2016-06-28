@@ -243,48 +243,48 @@ public class UnsafeArrayWriter {
     boolean[] input = ((GenericBooleanArrayData)arrayData).primitiveArray();
     int length = input.length;
     Platform.copyMemory(input, Platform.INT_ARRAY_OFFSET,
-            holder.buffer, holder.cursor, length);
+            holder.buffer, startingOffset + headerInBytes, length);
   }
 
   public void writePrimitiveByteArray(ArrayData arrayData) {
     byte[] input = ((GenericByteArrayData)arrayData).primitiveArray();
     int length = input.length;
     Platform.copyMemory(input, Platform.INT_ARRAY_OFFSET,
-            holder.buffer, holder.cursor, length);
+            holder.buffer, startingOffset + headerInBytes, length);
   }
 
   public void writePrimitiveShortArray(ArrayData arrayData) {
     short[] input = ((GenericShortArrayData)arrayData).primitiveArray();
     int length = input.length * 2;
     Platform.copyMemory(input, Platform.INT_ARRAY_OFFSET,
-            holder.buffer, holder.cursor, length);
+            holder.buffer, startingOffset + headerInBytes, length);
   }
 
   public void writePrimitiveIntArray(ArrayData arrayData) {
     int[] input = ((GenericIntArrayData)arrayData).primitiveArray();
     int length = input.length * 4;
     Platform.copyMemory(input, Platform.INT_ARRAY_OFFSET,
-            holder.buffer, holder.cursor, length);
+            holder.buffer, startingOffset + headerInBytes, length);
   }
 
   public void writePrimitiveLongArray(ArrayData arrayData) {
     long[] input = ((GenericLongArrayData)arrayData).primitiveArray();
     int length = input.length * 8;
     Platform.copyMemory(input, Platform.LONG_ARRAY_OFFSET,
-            holder.buffer, holder.cursor, length);
+            holder.buffer, startingOffset + headerInBytes, length);
   }
 
   public void writePrimitiveFloatArray(ArrayData arrayData) {
     float[] input = ((GenericFloatArrayData)arrayData).primitiveArray();
     int length = input.length * 4;
     Platform.copyMemory(input, Platform.FLOAT_ARRAY_OFFSET,
-            holder.buffer, holder.cursor, length);
+            holder.buffer, startingOffset + headerInBytes, length);
   }
 
   public void writePrimitiveDoubleArray(ArrayData arrayData) {
     double[] input = ((GenericDoubleArrayData)arrayData).primitiveArray();
     int length = input.length * 8;
     Platform.copyMemory(input, Platform.DOUBLE_ARRAY_OFFSET,
-            holder.buffer, holder.cursor, length);
+            holder.buffer, startingOffset + headerInBytes, length);
   }
 }
