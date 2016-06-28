@@ -61,12 +61,6 @@ class DataFrameComplexTypeSuite extends QueryTest with SharedSQLContext {
     validate(df.selectExpr("Array(v + 3, v + 4)"))
   }
 
-  test("primitive type on array") {
-    val rows = sparkContext.parallelize(Seq(1, 2), 1).toDF("v").
-      selectExpr("Array(v + 2, v + 3)").collect
-    QueryTest.sameRows(Seq(Row(Array(3, 4)), Row(Array(4, 5))), rows.toSeq)
-  }
-
   test("primitive type and null on array") {
     val rows = sparkContext.parallelize(Seq(1, 2), 1).toDF("v").
       selectExpr("Array(v + 2, null, v + 3)").collect
@@ -93,6 +87,22 @@ class DataFrameComplexTypeSuite extends QueryTest with SharedSQLContext {
     val rows = sparkContext.parallelize(Seq(1, 2), 1).toDF("v").
       selectExpr("map(v, null)").collect
     QueryTest.sameRows(Seq(Row(Map(1 -> null)), Row(Map(2 -> null))), rows.toSeq)
+
+  test("primitive type on array") {
+    val df = sparkContext.parallelize(Seq(1, 2), 1).toDF("v")
+    val resDF = df.selectExpr("Array(v + 2, v + 3)")
+    checkAnswer(resDF,
+      Seq(Row(Array(3, 4)), Row(Array(4, 5))))
+  }
+
+  test("primitive array or null on array") {
+    val df = sparkContext.parallelize(Seq(1, 2), 1).toDF("v")
+    val resDF = df.selectExpr("Array(Array(v, v + 1, v + 2)," +
+                              "null," +
+                              "Array(v, v - 1, v - 2))")
+    QueryTest.checkAnswer(resDF,
+      Seq(Row(Array(Array(1, 2, 3), null, Array(1, 0, -1))),
+        Row(Array(Array(2, 3, 4), null, Array(2, 1, 0)))))
   }
 
   test("UDF on struct") {
