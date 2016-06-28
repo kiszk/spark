@@ -248,7 +248,11 @@ case class NewInstance(
     val constructorCall = outer.map { gen =>
       s"""${gen.value}.new ${cls.getSimpleName}($argString)"""
     }.getOrElse {
-      s"new $className($argString)"
+      if (!cls.isAssignableFrom(classOf[GenericArrayData])) {
+        s"new $className($argString)"
+      } else {
+        s"${cls.getName}.allocate($argString)"
+      }
     }
 
     val code = s"""
@@ -475,7 +479,7 @@ case class MapObjects private(
           $loopIndex += 1;
         }
 
-        ${ev.value} = new ${classOf[GenericArrayData].getName}($convertedArray);
+        ${ev.value} = ${classOf[GenericArrayData].getName}.allocate($convertedArray);
       }
     """
     ev.copy(code = code, isNull = genInputData.isNull)

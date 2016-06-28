@@ -20,10 +20,66 @@ package org.apache.spark.sql.catalyst.util
 import scala.collection.JavaConverters._
 
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.types.{DataType, Decimal}
+import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 
-class GenericArrayData(val array: Array[Any]) extends ArrayData {
+object GenericArrayData {
+  def allocate(array: Array[Any]): GenericRefArrayData = new GenericRefArrayData(array)
+  def allocate(seq: Seq[Any]): GenericRefArrayData = new GenericRefArrayData(seq)
+  def allocate(list: java.util.List[Any]): GenericRefArrayData = new GenericRefArrayData(list)
+  def allocate(seqOrArray: Any): GenericRefArrayData = new GenericRefArrayData(seqOrArray)
+  def allocate(primitiveArray: Array[Int]): GenericIntArrayData =
+    new GenericIntArrayData(primitiveArray)
+  def allocate(primitiveArray: Array[Long]): GenericLongArrayData =
+    new GenericLongArrayData(primitiveArray)
+  def allocate(primitiveArray: Array[Float]): GenericFloatArrayData =
+    new GenericFloatArrayData(primitiveArray)
+  def allocate(primitiveArray: Array[Double]): GenericDoubleArrayData =
+    new GenericDoubleArrayData(primitiveArray)
+  def allocate(primitiveArray: Array[Short]): GenericShortArrayData =
+    new GenericShortArrayData(primitiveArray)
+  def allocate(primitiveArray: Array[Byte]): GenericByteArrayData =
+    new GenericByteArrayData(primitiveArray)
+  def allocate(primitiveArray: Array[Boolean]): GenericBooleanArrayData =
+    new GenericBooleanArrayData(primitiveArray)
+}
+
+abstract class GenericArrayData extends ArrayData {
+  override def get(ordinal: Int, elementType: DataType): AnyRef =
+    throw new UnsupportedOperationException("get() method is not supported")
+  override def getBoolean(ordinal: Int): Boolean =
+    throw new UnsupportedOperationException("getBoolean() method is not supported")
+  override def getByte(ordinal: Int): Byte =
+    throw new UnsupportedOperationException("getByte() method is not supported")
+  override def getShort(ordinal: Int): Short =
+    throw new UnsupportedOperationException("getShort() method is not supported")
+  override def getInt(ordinal: Int): Int =
+    throw new UnsupportedOperationException("getInt() method is not supported")
+  override def getLong(ordinal: Int): Long =
+    throw new UnsupportedOperationException("getLong() method is not supported")
+  override def getFloat(ordinal: Int): Float =
+    throw new UnsupportedOperationException("getFloat() method is not supported")
+  override def getDouble(ordinal: Int): Double =
+    throw new UnsupportedOperationException("getDouble() method is not supported")
+  override def getDecimal(ordinal: Int, precision: Int, scale: Int): Decimal =
+    throw new UnsupportedOperationException("getDecimal() method is not supported")
+  override def getUTF8String(ordinal: Int): UTF8String =
+    throw new UnsupportedOperationException("getUTF8String() method is not supported")
+  override def getBinary(ordinal: Int): Array[Byte] =
+    throw new UnsupportedOperationException("getBinary() method is not supported")
+  override def getInterval(ordinal: Int): CalendarInterval =
+    throw new UnsupportedOperationException("getInterval() method is not supported")
+  override def getStruct(ordinal: Int, numFields: Int): InternalRow =
+    throw new UnsupportedOperationException("getStruct() method is not supported")
+  override def getArray(ordinal: Int): ArrayData =
+    throw new UnsupportedOperationException("getArray() method is not supported")
+  override def getMap(ordinal: Int): MapData =
+    throw new UnsupportedOperationException("getMap() method is not supported")
+
+  override def toString(): String = array.mkString("[", ",", "]")
+}
+
+final class GenericRefArrayData(val array: Array[Any]) extends GenericArrayData {
 
   def this(seq: Seq[Any]) = this(seq.toArray)
   def this(list: java.util.List[Any]) = this(list.asScala)
@@ -42,7 +98,7 @@ class GenericArrayData(val array: Array[Any]) extends ArrayData {
     case array: Array[_] => array.toSeq
   })
 
-  override def copy(): ArrayData = new GenericArrayData(array.clone())
+  override def copy(): GenericRefArrayData = new GenericRefArrayData(array.clone())
 
   override def numElements(): Int = array.length
 
@@ -64,16 +120,14 @@ class GenericArrayData(val array: Array[Any]) extends ArrayData {
   override def getArray(ordinal: Int): ArrayData = getAs(ordinal)
   override def getMap(ordinal: Int): MapData = getAs(ordinal)
 
-  override def toString(): String = array.mkString("[", ",", "]")
-
   override def equals(o: Any): Boolean = {
-    if (!o.isInstanceOf[GenericArrayData]) {
+    if (o == null || !o.isInstanceOf[GenericArrayData]) {
       return false
     }
 
     val other = o.asInstanceOf[GenericArrayData]
     if (other eq null) {
-      return false
+      return false;
     }
 
     val len = numElements()
@@ -142,3 +196,227 @@ class GenericArrayData(val array: Array[Any]) extends ArrayData {
     result
   }
 }
+
+final class GenericIntArrayData(val primitiveArray: Array[Int]) extends GenericArrayData {
+  override def array(): Array[Any] = primitiveArray.toArray
+
+  override def copy(): GenericIntArrayData = new GenericIntArrayData(toIntArray)
+
+  override def numElements(): Int = primitiveArray.length
+
+  override def isNullAt(ordinal: Int): Boolean = false
+  override def getInt(ordinal: Int): Int = primitiveArray(ordinal)
+  override def toIntArray(): Array[Int] = {
+    val array = new Array[Int](numElements)
+    System.arraycopy(primitiveArray, 0, array, 0, numElements)
+    array
+  }
+
+  override def equals(o: Any): Boolean = {
+    if (o == null || !o.isInstanceOf[GenericIntArrayData]) {
+      return false
+    }
+
+    val other = o.asInstanceOf[GenericIntArrayData]
+    if (other eq null) {
+      return false;
+    }
+
+    java.util.Arrays.equals(primitiveArray, other.primitiveArray)
+  }
+
+  override def hashCode: Int = java.util.Arrays.hashCode(primitiveArray)
+}
+
+final class GenericLongArrayData(val primitiveArray: Array[Long])
+  extends GenericArrayData {
+  override def array(): Array[Any] = primitiveArray.toArray
+
+  override def copy(): GenericLongArrayData = new GenericLongArrayData(toLongArray)
+
+  override def numElements(): Int = primitiveArray.length
+
+  override def isNullAt(ordinal: Int): Boolean = false
+  override def getLong(ordinal: Int): Long = primitiveArray(ordinal)
+  override def toLongArray(): Array[Long] = {
+    val array = new Array[Long](numElements)
+    System.arraycopy(primitiveArray, 0, array, 0, numElements)
+    array
+  }
+
+  override def equals(o: Any): Boolean = {
+    if (o == null || !o.isInstanceOf[GenericLongArrayData]) {
+      return false
+    }
+
+    val other = o.asInstanceOf[GenericLongArrayData]
+    if (other eq null) {
+      return false
+    }
+
+    java.util.Arrays.equals(primitiveArray, other.primitiveArray)
+  }
+
+  override def hashCode: Int = java.util.Arrays.hashCode(primitiveArray)
+}
+
+final class GenericFloatArrayData(val primitiveArray: Array[Float])
+  extends GenericArrayData {
+  override def array(): Array[Any] = primitiveArray.toArray
+
+  override def copy(): GenericFloatArrayData = new GenericFloatArrayData(toFloatArray)
+
+  override def numElements(): Int = primitiveArray.length
+
+  override def isNullAt(ordinal: Int): Boolean = false
+  override def getFloat(ordinal: Int): Float = primitiveArray(ordinal)
+  override def toFloatArray(): Array[Float] = {
+    val array = new Array[Float](numElements)
+    System.arraycopy(primitiveArray, 0, array, 0, numElements)
+    array
+  }
+
+  override def equals(o: Any): Boolean = {
+    if (o == null || !o.isInstanceOf[GenericFloatArrayData]) {
+      return false
+    }
+
+    val other = o.asInstanceOf[GenericFloatArrayData]
+    if (other eq null) {
+      return false
+    }
+
+    java.util.Arrays.equals(primitiveArray, other.primitiveArray)
+  }
+
+  override def hashCode: Int = java.util.Arrays.hashCode(primitiveArray)
+}
+
+final class GenericDoubleArrayData(val primitiveArray: Array[Double])
+  extends GenericArrayData {
+  override def array(): Array[Any] = primitiveArray.toArray
+
+  override def copy(): GenericDoubleArrayData = new GenericDoubleArrayData(toDoubleArray)
+
+  override def numElements(): Int = primitiveArray.length
+
+  override def isNullAt(ordinal: Int): Boolean = false
+  override def getDouble(ordinal: Int): Double = primitiveArray(ordinal)
+  override def toDoubleArray(): Array[Double] = {
+    val array = new Array[Double](numElements)
+    System.arraycopy(primitiveArray, 0, array, 0, numElements)
+    array
+  }
+
+  override def equals(o: Any): Boolean = {
+    if (o == null || !o.isInstanceOf[GenericDoubleArrayData]) {
+      return false
+    }
+
+    val other = o.asInstanceOf[GenericDoubleArrayData]
+    if (other eq null) {
+      return false
+    }
+
+    java.util.Arrays.equals(primitiveArray, other.primitiveArray)
+  }
+
+  override def hashCode: Int = java.util.Arrays.hashCode(primitiveArray)
+}
+
+final class GenericShortArrayData(val primitiveArray: Array[Short])
+  extends GenericArrayData {
+  override def array(): Array[Any] = primitiveArray.toArray
+
+  override def copy(): GenericShortArrayData = new GenericShortArrayData(toShortArray)
+
+  override def numElements(): Int = primitiveArray.length
+
+  override def isNullAt(ordinal: Int): Boolean = false
+  override def getShort(ordinal: Int): Short = primitiveArray(ordinal)
+  override def toShortArray(): Array[Short] = {
+    val array = new Array[Short](numElements)
+    System.arraycopy(primitiveArray, 0, array, 0, numElements)
+    array
+  }
+
+  override def equals(o: Any): Boolean = {
+    if (o == null || !o.isInstanceOf[GenericShortArrayData]) {
+      return false
+    }
+
+    val other = o.asInstanceOf[GenericShortArrayData]
+    if (other eq null) {
+      return false
+    }
+
+    java.util.Arrays.equals(primitiveArray, other.primitiveArray)
+  }
+
+  override def hashCode: Int = java.util.Arrays.hashCode(primitiveArray)
+}
+
+final class GenericByteArrayData(val primitiveArray: Array[Byte])
+  extends GenericArrayData {
+  override def array(): Array[Any] = primitiveArray.toArray
+
+  override def copy(): GenericByteArrayData = new GenericByteArrayData(toByteArray)
+
+  override def numElements(): Int = primitiveArray.length
+
+  override def isNullAt(ordinal: Int): Boolean = false
+  override def getByte(ordinal: Int): Byte = primitiveArray(ordinal)
+  override def toByteArray(): Array[Byte] = {
+    val array = new Array[Byte](numElements)
+    System.arraycopy(primitiveArray, 0, array, 0, numElements)
+    array
+  }
+
+  override def equals(o: Any): Boolean = {
+    if (o == null || !o.isInstanceOf[GenericByteArrayData]) {
+      return false
+    }
+
+    val other = o.asInstanceOf[GenericByteArrayData]
+    if (other eq null) {
+      return false
+    }
+
+    java.util.Arrays.equals(primitiveArray, other.primitiveArray)
+  }
+
+  override def hashCode: Int = java.util.Arrays.hashCode(primitiveArray)
+}
+
+final class GenericBooleanArrayData(val primitiveArray: Array[Boolean])
+  extends GenericArrayData {
+  override def array(): Array[Any] = primitiveArray.toArray
+
+  override def copy(): GenericBooleanArrayData = new GenericBooleanArrayData(toBooleanArray)
+
+  override def numElements(): Int = primitiveArray.length
+
+  override def isNullAt(ordinal: Int): Boolean = false
+  override def getBoolean(ordinal: Int): Boolean = primitiveArray(ordinal)
+  override def toBooleanArray(): Array[Boolean] = {
+    val array = new Array[Boolean](numElements)
+    System.arraycopy(primitiveArray, 0, array, 0, numElements)
+    array
+  }
+
+  override def equals(o: Any): Boolean = {
+    if (o == null || !o.isInstanceOf[GenericBooleanArrayData]) {
+      return false
+    }
+
+    val other = o.asInstanceOf[GenericBooleanArrayData]
+    if (other eq null) {
+      return false
+    }
+
+    java.util.Arrays.equals(primitiveArray, other.primitiveArray)
+  }
+
+  override def hashCode: Int = java.util.Arrays.hashCode(primitiveArray)
+}
+

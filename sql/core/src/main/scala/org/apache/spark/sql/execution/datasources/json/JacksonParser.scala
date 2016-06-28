@@ -247,7 +247,7 @@ object JacksonParser extends Logging {
       values += convertField(factory, parser, elementType)
     }
 
-    new GenericArrayData(values.toArray)
+    GenericArrayData.allocate(values.toArray)
   }
 
   def parseJson(
