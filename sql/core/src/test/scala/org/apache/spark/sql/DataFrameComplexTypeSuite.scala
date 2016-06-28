@@ -59,12 +59,17 @@ class DataFrameComplexTypeSuite extends QueryTest with SharedSQLContext {
   test ("check elimination of zeroOutNullBytes on struct") {
     val df = sparkContext.parallelize(Seq(1, 2), 1).toDF("v")
     validate(df.selectExpr("Array(v + 3, v + 4)"))
+
+  test("primitive type on array") {
+    val rows = sparkContext.parallelize(Seq(1, 2), 1).toDF("v").
+      selectExpr("Array(v + 2, v + 3)")
+    checkAnswer(rows, Seq(Row(Array(3, 4)), Row(Array(4, 5))))
   }
 
   test("primitive type and null on array") {
     val rows = sparkContext.parallelize(Seq(1, 2), 1).toDF("v").
-      selectExpr("Array(v + 2, null, v + 3)").collect
-    QueryTest.sameRows(Seq(Row(Array(3, null, 4)), Row(Array(4, null, 5))), rows.toSeq)
+      selectExpr("Array(v + 2, null, v + 3)")
+    checkAnswer(rows, Seq(Row(Array(3, null, 4)), Row(Array(4, null, 5))))
   }
 
   test("array with null on array") {
@@ -103,6 +108,8 @@ class DataFrameComplexTypeSuite extends QueryTest with SharedSQLContext {
     QueryTest.checkAnswer(resDF,
       Seq(Row(Array(Array(1, 2, 3), null, Array(1, 0, -1))),
         Row(Array(Array(2, 3, 4), null, Array(2, 1, 0)))))
+                 "null," +
+                 "Array(v, v - 1))").collect
   }
 
   test("UDF on struct") {

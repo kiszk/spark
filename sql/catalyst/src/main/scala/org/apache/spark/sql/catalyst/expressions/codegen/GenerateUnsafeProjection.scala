@@ -228,21 +228,30 @@ object GenerateUnsafeProjection extends CodeGenerator[Seq[Expression], UnsafePro
     }
 
     val dataType = if (ctx.isPrimitiveType(jt)) ctx.primitiveTypeName(et) else ""
-    val storeElement = if (containsNull) {
+    val storeElements = if (containsNull) {
       s"""
-       if ($input.isNullAt($index)) {
-         $arrayWriter.setNull$dataType($index);
-       } else {
-         final $jt $element = ${ctx.getValue(input, et, index)};
-         $writeElement
-       }
-     """
+      for (int $index = 0; $index < $numElements; $index++) {
+        if ($input.isNullAt($index)) {
+          $arrayWriter.setNullAt($index);
+        } else {
+          final $jt $element = ${ctx.getValue(input, et, index)};
+          $writeElement
+        }
+      }
+      """
     } else {
-      s"""
-       final $jt $element = ${ctx.getValue(input, et, index)};
-       $writeElement
-     """
+      if (ctx.isPrimitiveType(et)) {
+        s"$arrayWriter.writePrimitive${dataType}Array($input);"
+      } else {
+        s"""
+        for (int $index = 0; $index < $numElements; $index++) {
+          final $jt $element = ${ctx.getValue(input, et, index)};
+          $writeElement
+        }
+        """
+      }
     }
+
     s"""
       if ($input instanceof UnsafeArrayData) {
         ${writeUnsafeData(ctx, s"((UnsafeArrayData) $input)", bufferHolder)}
@@ -250,9 +259,7 @@ object GenerateUnsafeProjection extends CodeGenerator[Seq[Expression], UnsafePro
         final int $numElements = $input.numElements();
         $arrayWriter.initialize($bufferHolder, $numElements, $fixedElementSize);
 
-        for (int $index = 0; $index < $numElements; $index++) {
-          $storeElement
-        }
+        $storeElements
       }
     """
   }
@@ -289,7 +296,11 @@ object GenerateUnsafeProjection extends CodeGenerator[Seq[Expression], UnsafePro
         // Write the numBytes of key array into the first 4 bytes.
         Platform.putInt($bufferHolder.buffer, $tmpCursor - 4, $bufferHolder.cursor - $tmpCursor);
 
+<<<<<<< HEAD
         ${writeArrayToBuffer(ctx, values, valueType, valueContainsNull, bufferHolder)}
+=======
+        ${writeArrayToBuffer(ctx, values, valueType, true, bufferHolder)}
+>>>>>>> origin/SPARK-16215
       }
     """
   }
