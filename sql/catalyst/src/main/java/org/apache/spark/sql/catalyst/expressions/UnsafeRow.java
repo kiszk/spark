@@ -104,7 +104,7 @@ public final class UnsafeRow extends MutableRow implements Externalizable, KryoS
   }
 
   public static boolean isMutable(DataType dt) {
-    return mutableFieldTypes.contains(dt) || dt instanceof DecimalType;
+    return mutableFieldTypes.contains(dt) || dt instanceof DecimalType || dt instanceof ArrayType;
   }
 
   //////////////////////////////////////////////////////////////////////////////

@@ -18,8 +18,8 @@
 package org.apache.spark.sql.catalyst.util
 
 import scala.collection.JavaConverters._
-
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.UnsafeArrayData
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.{CalendarInterval, UTF8String}
 
@@ -306,6 +306,40 @@ final class GenericDoubleArrayData(val primitiveArray: Array[Double])
     val array = new Array[Double](numElements)
     System.arraycopy(primitiveArray, 0, array, 0, numElements)
     array
+  }
+
+  override def inplaceAdd(o: ArrayData): ArrayData = {
+    if (!o.isInstanceOf[ArrayData]) {
+      return null
+    }
+
+    val t = if (numElements != 0) this else {
+      GenericArrayData.allocate(new Array[Double](o.numElements))
+    }
+    val thisLen = t.numElements
+    val otherLen = o.numElements
+    val len = if (thisLen <= otherLen) thisLen else otherLen
+
+    if (o.isInstanceOf[GenericDoubleArrayData]) {
+      /* for partial add */
+      val other = o.asInstanceOf[GenericDoubleArrayData]
+      var i = 0
+      while (i < len) {
+        t.primitiveArray(i) += other.primitiveArray(i)
+        i += 1
+      }
+      return t
+    } else if (o.isInstanceOf[UnsafeArrayData]) {
+      /* for total add */
+      val other = o.asInstanceOf[UnsafeArrayData]
+      var i = 0
+      while (i < len) {
+        t.primitiveArray(i) += other.getDouble(i)
+        i += 1
+      }
+      return t
+    }
+    throw new UnsupportedOperationException(s"inplaceAdd: for ${o.getClass}")
   }
 
   override def equals(o: Any): Boolean = {

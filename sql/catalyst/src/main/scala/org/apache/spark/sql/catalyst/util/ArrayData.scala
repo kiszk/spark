@@ -29,6 +29,10 @@ abstract class ArrayData extends SpecializedGetters with Serializable {
 
   def array: Array[Any]
 
+  def inplaceAdd(array2: ArrayData): ArrayData = {
+    throw new UnsupportedOperationException("inplaceAdd() is not supported")
+  }
+
   def toBooleanArray(): Array[Boolean] = {
     val size = numElements()
     val values = new Array[Boolean](size)

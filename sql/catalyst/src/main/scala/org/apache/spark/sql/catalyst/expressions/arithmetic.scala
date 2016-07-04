@@ -161,6 +161,33 @@ case class Add(left: Expression, right: Expression) extends BinaryArithmetic wit
 }
 
 @ExpressionDescription(
+  usage = "a _FUNC_ b - Returns a = a+b.")
+case class InplaceAdd(left: Expression, right: Expression) extends
+  BinaryArithmetic with NullIntolerant {
+
+  override def inputType: AbstractDataType = TypeCollection.NumericAndInterval
+
+  override def symbol: String = "++"
+
+  private lazy val numeric = TypeUtils.getNumeric(dataType)
+
+  protected override def nullSafeEval(input1: Any, input2: Any): Any = {
+    if (dataType.isInstanceOf[CalendarIntervalType]) {
+      input1.asInstanceOf[CalendarInterval].add(input2.asInstanceOf[CalendarInterval])
+    } else {
+      numeric.plus(input1, input2)
+    }
+  }
+
+  override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = dataType match {
+    case ArrayType(_, _) =>
+      defineCodeGen(ctx, ev, (eval1, eval2) => s"$eval1.inplaceAdd($eval2)")
+    case _ =>
+      throw new UnsupportedOperationException("InplaceAdd")
+  }
+}
+
+@ExpressionDescription(
   usage = "a _FUNC_ b - Returns a-b.")
 case class Subtract(left: Expression, right: Expression)
     extends BinaryArithmetic with NullIntolerant {
