@@ -547,7 +547,7 @@ class CodegenContext {
    * @param execute the code that should only be executed when the input is not null.
    */
   def nullSafeExec(nullable: Boolean, isNull: String)(execute: String): String = {
-    if (nullable) {
+    if (nullable && isNull != "false") {
       s"""
         if (!$isNull) {
           $execute
