@@ -450,7 +450,8 @@ case class Cast(child: Expression, dataType: DataType) extends UnaryExpression w
     val eval = child.genCode(ctx)
     val nullSafeCast = nullSafeCastFunction(child.dataType, dataType, ctx)
     ev.copy(code = eval.code +
-      castCode(ctx, eval.value, eval.isNull, ev.value, ev.isNull, dataType, nullSafeCast))
+      castCode(ctx, eval.value, eval.isNull, ev.value, ev.isNull, dataType, nullSafeCast),
+      isNull = eval.isNull)
   }
 
   // three function arguments are: child.primitive, result.primitive and result.isNull
@@ -493,6 +494,13 @@ case class Cast(child: Expression, dataType: DataType) extends UnaryExpression w
   // Key and Value, Struct's field, we need to name out all the variable names involved in a cast.
   private[this] def castCode(ctx: CodegenContext, childPrim: String, childNull: String,
     resultPrim: String, resultNull: String, resultType: DataType, cast: CastFunction): String = {
+    if (childNull == "false") {
+    s"""
+      boolean $resultNull = $childNull;
+      ${ctx.javaType(resultType)} $resultPrim;
+      ${cast(childPrim, resultPrim, resultNull)}
+    """
+    } else {
     s"""
       boolean $resultNull = $childNull;
       ${ctx.javaType(resultType)} $resultPrim = ${ctx.defaultValue(resultType)};
@@ -500,6 +508,7 @@ case class Cast(child: Expression, dataType: DataType) extends UnaryExpression w
         ${cast(childPrim, resultPrim, resultNull)}
       }
     """
+    }
   }
 
   private[this] def castToStringCode(from: DataType, ctx: CodegenContext): CastFunction = {

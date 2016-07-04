@@ -139,20 +139,31 @@ case class Invoke(
     } else {
       s"(${ctx.boxedType(javaType)}) ${obj.value}.$functionName($argString)"
     }
+    val isNullFunc =
+      (functionName != "toIntArray") && (functionName != "toLongArray") &&
+        (functionName != "toFloatArray") && (functionName != "toDoubleArray") &&
+        (functionName != "apply")
 
-    val setIsNull = if (propagateNull && arguments.nonEmpty) {
-      s"boolean ${ev.isNull} = ${obj.isNull} || ${argGen.map(_.isNull).mkString(" || ")};"
+    val isNullAll = (obj.isNull == "false") && argGen.forall(_.isNull == "false")
+    var isNull = ev.isNull
+    val setIsNull = if (!isNullAll && propagateNull && arguments.nonEmpty) {
+      s"boolean $isNull = ${obj.isNull} || ${argGen.map(_.isNull).mkString(" || ")};"
     } else {
-      s"boolean ${ev.isNull} = ${obj.isNull};"
+      isNull = "false"
+      s"boolean ${ev.isNull} = false;"
     }
 
     val evaluate = if (method.forall(_.getExceptionTypes.isEmpty)) {
-      s"final $javaType ${ev.value} = ${ev.isNull} ? ${ctx.defaultValue(dataType)} : $callFunc;"
+      if (isNull == "false") {
+        s"final $javaType ${ev.value} = $callFunc;"
+      } else {
+        s"final $javaType ${ev.value} = $isNull ? ${ctx.defaultValue(dataType)} : $callFunc;"
+      }
     } else {
       s"""
         $javaType ${ev.value} = ${ctx.defaultValue(javaType)};
         try {
-          ${ev.value} = ${ev.isNull} ? ${ctx.defaultValue(javaType)} : $callFunc;
+          ${ev.value} = $isNull ? ${ctx.defaultValue(javaType)} : $callFunc;
         } catch (Exception e) {
           org.apache.spark.unsafe.Platform.throwException(e);
         }
@@ -161,8 +172,9 @@ case class Invoke(
 
     // If the function can return null, we do an extra check to make sure our null bit is still set
     // correctly.
-    val postNullCheck = if (ctx.defaultValue(dataType) == "null") {
-      s"${ev.isNull} = ${ev.value} == null;"
+    val postNullCheck = if (isNullFunc && (ctx.defaultValue(dataType) == "null")) {
+      isNull = s"${ev.value} == null"
+      s"${ev.isNull} = ${ev.value} == null; // functions result check"
     } else {
       ""
     }
@@ -174,7 +186,7 @@ case class Invoke(
       $evaluate
       $postNullCheck
      """
-    ev.copy(code = code)
+    ev.copy(code = code, isNull = isNull)
   }
 
   override def toString: String = s"$targetObject.$functionName"
@@ -237,8 +249,9 @@ case class NewInstance(
 
     val outer = outerPointer.map(func => Literal.fromObject(func()).genCode(ctx))
 
+    val isNullAll = argGen.forall(_.isNull == "false")
     var isNull = ev.isNull
-    val setIsNull = if (propagateNull && arguments.nonEmpty) {
+    val setIsNull = if (!isNullAll && propagateNull && arguments.nonEmpty) {
       s"final boolean $isNull = ${argGen.map(_.isNull).mkString(" || ")};"
     } else {
       isNull = "false"
@@ -255,11 +268,16 @@ case class NewInstance(
       }
     }
 
+    val assignment = if (isNull == "false") {
+      s"final $javaType ${ev.value} = $constructorCall;"
+    } else {
+      s"final $javaType ${ev.value} = $isNull ? ${ctx.defaultValue(javaType)} : $constructorCall;"
+    }
     val code = s"""
       ${argGen.map(_.code).mkString("\n")}
       ${outer.map(_.code).getOrElse("")}
       $setIsNull
-      final $javaType ${ev.value} = $isNull ? ${ctx.defaultValue(javaType)} : $constructorCall;
+      $assignment
      """
     ev.copy(code = code, isNull = isNull)
   }

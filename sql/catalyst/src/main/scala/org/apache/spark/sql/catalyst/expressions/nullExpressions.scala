@@ -68,12 +68,17 @@ case class Coalesce(children: Seq[Expression]) extends Expression {
     val first = children(0)
     val rest = children.drop(1)
     val firstEval = first.genCode(ctx)
-    ev.copy(code = s"""
+    var isNonNull = false
+    val code = s"""
       ${firstEval.code}
       boolean ${ev.isNull} = ${firstEval.isNull};
       ${ctx.javaType(dataType)} ${ev.value} = ${firstEval.value};""" +
       rest.map { e =>
       val eval = e.genCode(ctx)
+      if (firstEval.isNull == "false") {
+        ""
+      } else {
+      isNonNull = true;
       s"""
         if (${ev.isNull}) {
           ${eval.code}
@@ -83,7 +88,9 @@ case class Coalesce(children: Seq[Expression]) extends Expression {
           }
         }
       """
-    }.mkString("\n"))
+      }
+    }.mkString("\n")
+    ev.copy(code = code, isNull = if (!isNonNull) "false" else s"${ev.isNull}")
   }
 }
 
