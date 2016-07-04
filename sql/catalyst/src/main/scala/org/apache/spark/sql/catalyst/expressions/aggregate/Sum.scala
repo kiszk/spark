@@ -34,10 +34,16 @@ case class Sum(child: Expression) extends DeclarativeAggregate {
   override def dataType: DataType = resultType
 
   override def inputTypes: Seq[AbstractDataType] =
-    Seq(TypeCollection(LongType, DoubleType, DecimalType))
+    Seq(TypeCollection(LongType, DoubleType, DecimalType),
+      ArrayType(LongType, false), ArrayType(DoubleType, false))
 
-  override def checkInputDataTypes(): TypeCheckResult =
-    TypeUtils.checkForNumericExpr(child.dataType, "function sum")
+  override def checkInputDataTypes(): TypeCheckResult = {
+    return child.dataType match {
+      case ArrayType(LongType, _) => TypeCheckResult.TypeCheckSuccess
+      case ArrayType(DoubleType, _) => TypeCheckResult.TypeCheckSuccess
+      case _ => TypeUtils.checkForNumericExpr(child.dataType, "function sum")
+    }
+  }
 
   private lazy val resultType = child.dataType match {
     case DecimalType.Fixed(precision, scale) =>
@@ -47,18 +53,28 @@ case class Sum(child: Expression) extends DeclarativeAggregate {
 
   private lazy val sumDataType = resultType
 
-  private lazy val sum = AttributeReference("sum", sumDataType)()
+  private lazy val sum = AttributeReference("sum", sumDataType,
+    !child.dataType.isInstanceOf[ArrayType] && child.nullable)()  // Gita's change
 
   private lazy val zero = Cast(Literal(0), sumDataType)
 
   override lazy val aggBufferAttributes = sum :: Nil
 
   override lazy val initialValues: Seq[Expression] = Seq(
-    /* sum = */ Literal.create(null, sumDataType)
+    /* sum = */
+    if (!child.dataType.isInstanceOf[ArrayType] && child.nullable) {  // Gita's change
+      Literal.create(null, sumDataType)
+    } else {
+      if (child.dataType.isInstanceOf[ArrayType]) {
+        Literal.create(null, sumDataType)
+      } else {
+        zero
+      }
+    }
   )
 
   override lazy val updateExpressions: Seq[Expression] = {
-    if (child.nullable) {
+    if (!child.dataType.isInstanceOf[ArrayType] && child.nullable) {
       Seq(
         /* sum = */
         Coalesce(Seq(Add(Coalesce(Seq(sum, zero)), Cast(child, sumDataType)), sum))
@@ -66,7 +82,11 @@ case class Sum(child: Expression) extends DeclarativeAggregate {
     } else {
       Seq(
         /* sum = */
-        Add(Coalesce(Seq(sum, zero)), Cast(child, sumDataType))
+        if (child.dataType.isInstanceOf[ArrayType]) {
+          InplaceAdd(sum, Cast(child, sumDataType))
+        } else {
+          Add(Coalesce(Seq(sum, zero)), Cast(child, sumDataType))
+        }
       )
     }
   }
@@ -74,7 +94,11 @@ case class Sum(child: Expression) extends DeclarativeAggregate {
   override lazy val mergeExpressions: Seq[Expression] = {
     Seq(
       /* sum = */
-      Coalesce(Seq(Add(Coalesce(Seq(sum.left, zero)), sum.right), sum.left))
+      if (child.dataType.isInstanceOf[ArrayType]) {
+        Coalesce(Seq(InplaceAdd(sum.left, sum.right), sum.left))
+      } else {
+        Coalesce(Seq(Add(Coalesce(Seq(sum.left, zero)), sum.right), sum.left))
+      }
     )
   }
 

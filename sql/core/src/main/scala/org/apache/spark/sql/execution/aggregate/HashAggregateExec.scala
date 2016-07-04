@@ -25,9 +25,10 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.expressions.codegen._
 import org.apache.spark.sql.catalyst.plans.physical._
+import org.apache.spark.sql.catalyst.util.GenericArrayData
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.metric.{SQLMetric, SQLMetrics}
-import org.apache.spark.sql.types.{DecimalType, StringType, StructType}
+import org.apache.spark.sql.types.{ArrayType, DecimalType, StringType, StructType}
 import org.apache.spark.unsafe.KVIterator
 import org.apache.spark.util.Utils
 
@@ -170,7 +171,13 @@ case class HashAggregateExec(
       ctx.addMutableState("boolean", isNull, "")
       ctx.addMutableState(ctx.javaType(e.dataType), value, "")
       // The initial expression should not access any column
-      val ev = e.genCode(ctx)
+      val ev = if (e.dataType.isInstanceOf[ArrayType] && e.toString == "null") {
+        val ArrayType(dt, _) = e.dataType
+        val javaType = ctx.javaType(dt)
+        ExprCode("", "false", s"${classOf[GenericArrayData].getName}.allocate(new $javaType[0])")
+      } else {
+        e.genCode(ctx)
+      }
       val initVars = s"""
          | $isNull = ${ev.isNull};
          | $value = ${ev.value};
