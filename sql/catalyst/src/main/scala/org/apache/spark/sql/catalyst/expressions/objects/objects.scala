@@ -149,8 +149,12 @@ case class Invoke(
     val setIsNull = if (!isNullAll && propagateNull && arguments.nonEmpty) {
       s"boolean $isNull = ${obj.isNull} || ${argGen.map(_.isNull).mkString(" || ")};"
     } else {
-      isNull = "false"
-      s"boolean ${ev.isNull} = false;"
+      if (isNullAll) {
+        isNull = "false"
+        s"boolean ${ev.isNull} = false;"
+      } else {
+        s"boolean ${ev.isNull} = ${obj.isNull};"
+      }
     }
 
     val evaluate = if (method.forall(_.getExceptionTypes.isEmpty)) {
