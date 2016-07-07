@@ -20,6 +20,8 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 
+import org.apache.commons.lang.NotImplementedException;
+
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.parquet.column.Dictionary;
 import org.apache.parquet.io.api.Binary;
@@ -535,7 +537,7 @@ public abstract class ColumnVector implements AutoCloseable {
   /**
    * Returns the array at rowid.
    */
-  public final Array getArray(int rowId) {
+  public ArrayData getArray(int rowId) {
     resultArray.length = getArrayLength(rowId);
     resultArray.offset = getArrayOffset(rowId);
     return resultArray;
@@ -558,7 +560,7 @@ public abstract class ColumnVector implements AutoCloseable {
    * Returns the value for rowId.
    */
   private Array getByteArray(int rowId) {
-    Array array = getArray(rowId);
+    Array array = (Array)getArray(rowId);
     array.data.loadBytes(array);
     return array;
   }
@@ -1002,6 +1004,26 @@ public abstract class ColumnVector implements AutoCloseable {
       this.childColumns[1] = ColumnVector.allocate(capacity, DataTypes.LongType, memMode);
       this.resultArray = null;
       this.resultStruct = new ColumnarBatch.Row(this.childColumns);
+    } else {
+      this.childColumns = null;
+      this.resultArray = null;
+      this.resultStruct = null;
+    }
+  }
+
+  protected ColumnVector(int capacity, DataType type) {
+    this.capacity = capacity;
+    this.type = type;
+
+    if (type instanceof ArrayType || type instanceof BinaryType || type instanceof StringType
+            || DecimalType.isByteArrayDecimalType(type)) {
+      this.childColumns = null;
+      this.resultArray = new Array(null);
+      this.resultStruct = null;
+    } else if (type instanceof StructType) {
+      throw new NotImplementedException();
+    } else if (type instanceof CalendarIntervalType) {
+      throw new NotImplementedException();
     } else {
       this.childColumns = null;
       this.resultArray = null;

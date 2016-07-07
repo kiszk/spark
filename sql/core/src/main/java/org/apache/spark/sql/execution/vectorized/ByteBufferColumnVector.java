@@ -17,21 +17,19 @@
 package org.apache.spark.sql.execution.vectorized;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 import org.apache.commons.lang.NotImplementedException;
-import org.apache.spark.memory.MemoryMode;
-import org.apache.spark.sql.catalyst.expressions.GenericMutableRow;
-import org.apache.spark.sql.catalyst.expressions.MutableRow;
-import org.apache.spark.sql.execution.columnar.BasicColumnAccessor;
+
+import org.apache.spark.sql.catalyst.expressions.UnsafeArrayData;
+import org.apache.spark.sql.catalyst.util.ArrayData;
 import org.apache.spark.sql.execution.columnar.ByteBufferHelper;
-import org.apache.spark.sql.execution.columnar.NativeColumnAccessor;
 import org.apache.spark.sql.types.*;
 import org.apache.spark.unsafe.Platform;
 
 /**
- * A column backed by an in memory JVM array. This stores the NULLs as a byte per value
- * and a java array for the values.
+ * A column backed by an in memory JVM byte array.
+ * This stores the NULLs as a byte per value and a java array for the values.
+ * Currently, this column vector is read-only
  */
 public final class ByteBufferColumnVector extends ColumnVector {
   // The data stored in these arrays need to maintain binary compatible. We can
@@ -40,14 +38,39 @@ public final class ByteBufferColumnVector extends ColumnVector {
   // This is faster than a boolean array and we optimize this over memory footprint.
   private byte[] nulls;
 
-  // Array for each type. Only 1 is populated for any type.
+  // Array stored in byte array
   private byte[] data;
   private long offset;
 
+  // Only set if type is Array.
+  private int[] arrayOffsets;
+  private UnsafeArrayData unsafeArray;
+
   protected ByteBufferColumnVector(int capacity, DataType type,
     boolean isConstant, ByteBuffer buffer, ByteBuffer nullsBuffer) {
-    super(capacity, type, MemoryMode.ON_HEAP);
-    if (this.resultArray != null || DecimalType.isByteArrayDecimalType(type)) {
+    super(capacity, type);
+    if (this.resultArray != null) {
+      data = buffer.array();
+      offset = Platform.BYTE_ARRAY_OFFSET + buffer.position();
+
+      unsafeArray = new UnsafeArrayData();
+      arrayOffsets = new int[capacity];
+
+      byte[] dataNulls = nullsBuffer.array();
+      int posNulls = Platform.BYTE_ARRAY_OFFSET + nullsBuffer.position();
+      int numNulls = Platform.getInt(dataNulls, posNulls);
+      for (int i = 0; i < numNulls; i++) {
+        int cordinal = Platform.getInt(dataNulls, posNulls + 4 + i * 4);
+        arrayOffsets[cordinal] = -1;
+      }
+
+      int pos = 0;
+      for (int i = 0; i < capacity; i++) {
+        if (arrayOffsets[i] < 0) continue;
+        arrayOffsets[i] = pos;
+        pos += Platform.getInt(data, offset + pos) + 4;
+      }
+    } else if (DecimalType.isByteArrayDecimalType(type)) {
       throw new NotImplementedException();
     } else if ((type instanceof FloatType) || (type instanceof DoubleType)) {
       data = buffer.array();
@@ -137,7 +160,8 @@ public final class ByteBufferColumnVector extends ColumnVector {
 
   @Override
   public final boolean getBoolean(int rowId) {
-    throw new NotImplementedException();
+    assert(dictionary == null);
+    return Platform.getBoolean(data, offset + rowId);
   }
 
   //
@@ -161,7 +185,8 @@ public final class ByteBufferColumnVector extends ColumnVector {
 
   @Override
   public final byte getByte(int rowId) {
-    throw new NotImplementedException();
+    assert(dictionary == null);
+    return Platform.getByte(data, offset + rowId);
   }
 
   //
@@ -185,9 +210,9 @@ public final class ByteBufferColumnVector extends ColumnVector {
 
   @Override
   public final short getShort(int rowId) {
-    throw new NotImplementedException();
+    assert(dictionary == null);
+    return Platform.getShort(data, offset + rowId * 2);
   }
-
 
   //
   // APIs dealing with Ints
@@ -215,7 +240,8 @@ public final class ByteBufferColumnVector extends ColumnVector {
 
   @Override
   public final int getInt(int rowId) {
-    throw new NotImplementedException();
+    assert(dictionary == null);
+    return Platform.getInt(data, offset + rowId * 4);
   }
 
   //
@@ -312,9 +338,16 @@ public final class ByteBufferColumnVector extends ColumnVector {
   //
 
   @Override
-  public final int getArrayLength(int rowId) { throw new NotImplementedException(); }
+  public final ArrayData getArray(int rowId) {
+    int length = getArrayLength(rowId);
+    unsafeArray.pointTo(data, offset + arrayOffsets[rowId] + 4, length);
+    return unsafeArray;
+  }
+
   @Override
-  public final int getArrayOffset(int rowId) { throw new NotImplementedException(); }
+  public final int getArrayLength(int rowId) { return Platform.getInt(data, offset + arrayOffsets[rowId]); }
+  @Override
+  public final int getArrayOffset(int rowId) { return arrayOffsets[rowId]; }
 
   @Override
   public final void putArray(int rowId, int offset, int length) {

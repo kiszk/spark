@@ -234,6 +234,7 @@ private[sql] object InMemoryTableScanExec {
        |
        |   while ($idx < $numRows) {
        |     int $rowidx = $idx++;
+       |     System.out.println("rowIdx="+$rowidx);
        |     ${codegen.consume(ctx, columns, null).trim}
        |     if (shouldStop()) return;
        |   }
@@ -252,10 +253,12 @@ private[sql] object InMemoryTableScanExec {
 
     s"""
       private void processBatch() throws java.io.IOException {
+        System.out.println("*** processBatch() ***");
         ${codeCol.trim}
       }
 
       private void processRow() throws java.io.IOException {
+        System.out.println("*** processRow() ***");
         ${codeRow.trim}
       }
 

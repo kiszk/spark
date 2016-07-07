@@ -66,6 +66,8 @@ case class CachedBatch(numRows: Int, buffers: Array[Array[Byte]], stats: Interna
     val accessor: BasicColumnAccessor[_] = dataType match {
       case FloatType => new FloatColumnAccessor(buffer)
       case DoubleType => new DoubleColumnAccessor(buffer)
+      case arrayType: ArrayType => new ArrayColumnAccessor(buffer, arrayType)
+      case _ => throw new UnsupportedOperationException(s"CachedBatch.column(): $dataType")
     }
 
     val (out, nullsBuffer) = if (accessor.isInstanceOf[NativeColumnAccessor[_]]) {
