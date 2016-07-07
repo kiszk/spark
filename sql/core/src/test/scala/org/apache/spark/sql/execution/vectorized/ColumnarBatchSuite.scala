@@ -382,7 +382,7 @@ class ColumnarBatchSuite extends SparkFunSuite {
       assert(column.arrayData().elementsAppended == 0)
     }}
   }
-
+/*
   test("Int Array") {
     (MemoryMode.ON_HEAP :: MemoryMode.OFF_HEAP :: Nil).foreach { memMode => {
       val column = ColumnVector.allocate(10, new ArrayType(IntegerType, true), memMode)
@@ -437,7 +437,7 @@ class ColumnarBatchSuite extends SparkFunSuite {
         === array)
     }}
   }
-
+*/
   test("Struct Column") {
     (MemoryMode.ON_HEAP :: MemoryMode.OFF_HEAP :: Nil).foreach { memMode => {
       val schema = new StructType().add("int", IntegerType).add("double", DoubleType)
