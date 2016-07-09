@@ -31,13 +31,12 @@ case class DataPointArray(x: Array[Double], y: Double)
 
 class LR {
 /*
-  class LR extends SparkFunSuite with SharedSQLContext {
+class LR extends SparkFunSuite with SharedSQLContext {
   test("benchmark") {
     runBenchmark(sqlContext, LR.NSLICES, LR.N, LR.D, LR.R, LR.ITERATIONS)
     LR.showSparkParamters(sqlContext.sparkContext.conf)
   }
 */
-
   def runBenchmark(sqlContext: SQLContext,
                    numSlices: Int, N: Int, D: Int, R: Double, ITERATIONS: Int): Unit = {
     import sqlContext.implicits._
@@ -99,7 +98,7 @@ class LR {
 
             val a = new Array[Double](D)
             i = 0
-              while (i < D) {
+            while (i < D) {
               a(i) = p.x(i) * (1 / (1 + scala.math.exp(-p.y * dotp)) - 1) * p.y
               i = i + 1
             }
@@ -114,11 +113,11 @@ class LR {
             a
           })
 
-          i = 0
-          while (i < D) {
-            w(i) = w(i) - gradient(i)
-            i = i + 1
-          }
+        i = 0
+        while (i < D) {
+          w(i) = w(i) - gradient(i)
+          i = i + 1
+        }
       } // iteration ends
       if (iter == 0) { print(w.slice(0, ns).mkString(s"final(0-${ns-1}): [", ",", "]\n")) }
     }
@@ -146,6 +145,7 @@ class LR {
             }
             a
           })
+/*
           .reduce((a, b) => {
             var i = 0
             while (i < D) {
@@ -154,7 +154,8 @@ class LR {
             }
             a
           })
-          //.agg(sum("value")).head.getAs[scala.collection.mutable.WrappedArray[Double]](0)
+*/
+          .agg(sum("value")).head.getAs[scala.collection.mutable.WrappedArray[Double]](0)
 
         i = 0
         while (i < D) {
@@ -170,8 +171,8 @@ class LR {
     ///////////////////////////////
 
     val benchmarkArray = new Benchmark("Array Dataset and DataFrame vs. RDD",
-       5, // valuesPerIteration
-       5  // minNumIters
+      5, // valuesPerIteration
+      5  // minNumIters
     )
 
     pointsArray.cache().count()
@@ -188,7 +189,7 @@ class LR {
     benchmarkArray.run()
 
     print(s"\nBenchmark parameters: " +
-      s"N=$N, D=$D, R=$R, ITERATIONS=$ITERATIONS, numSlices=$numSlices\n\n")
+      s"N=$N, D=$D, R=$R, ITERATIONS=$ITERATIONS, numSlices=$numSlices\n$benchmarkArray\n")
   }
 
   def run(sqlContext: SQLContext, nslices: Int, n: Int, d: Int, r: Double, iters: Int): Unit = {
