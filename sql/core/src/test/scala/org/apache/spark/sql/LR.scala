@@ -1,45 +1,45 @@
 /*
  */
 
+/**
+ * Benchmark to measure performance of logistic regression
+ * To run this:
+ *  bin/spark-submit [options] --class org.apache.spark.sql.LR
+ *    sql/core/target/spark-sql_*-tests.jar
+ *    [slices] [# of points] [# of dimensions] [iterations] [master URL]
+ */
+
 package org.apache.spark.sql
 
-import java.io.{Externalizable, ObjectInput, ObjectOutput}
-import java.sql.{Date, Timestamp}
+import java.io.File
 import java.util.Random
 
+import scala.io.Source
 import scala.util.Try
 
-import org.apache.spark.SparkEnv
-import scala.math._
-
-import org.apache.spark.sql.functions._
-
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkConf, SparkContext, SparkFunSuite}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-
-import org.apache.spark.util.Benchmark
-
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.test.SharedSQLContext
+import org.apache.spark.util.Benchmark
+import org.apache.spark.util.Utils
+
 
 case class DataPointScalar(y: Double)
 case class DataPointArray(x: Array[Double], y: Double)
 
-object LR {
-  val N = 100000 // 1024*1024*15  // Number of data points, orig 10000
-  val D = 100   // Number of dimensions
-  val R = 0.7  // Scaling factor
-  val ITERATIONS = 100
-  val rand = new Random(42)
+class LR {
+/*
+  class LR extends SparkFunSuite with SharedSQLContext {
+  test("benchmark") {
+    runBenchmark(sqlContext, LR.NSLICES, LR.N, LR.D, LR.R, LR.ITERATIONS)
+    LR.showSparkParamters(sqlContext.sparkContext.conf)
+  }
+*/
 
-
-  def main(args: Array[String]): Unit = {
-
-    val sparkConf = new SparkConf().setAppName("LR")
-    val sc = new SparkContext(sparkConf)
-
-    val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+  def runBenchmark(sqlContext: SQLContext,
+                   numSlices: Int, N: Int, D: Int, R: Double, ITERATIONS: Int): Unit = {
     import sqlContext.implicits._
 
     def withSQLConf(pairs: (String, String)*)(f: => Unit): Unit = {
@@ -56,10 +56,9 @@ object LR {
 
     sqlContext.conf.setConfString(SQLConf.WHOLESTAGE_CODEGEN_ENABLED.key, "true")
 
-    val numSlices = if (args.length > 0) args(0).toInt else 2
-
+    val rand = new Random(42)
     // initialize points data as RDD[DataPointArray]
-    val pointsArray = sc.parallelize(1 to N, 1).map(n => {
+    val pointsArray = sqlContext.sparkContext.parallelize(1 to N, numSlices).map(n => {
       val a = new Array[Double](D)
       val y = if (n % 2 == 0) -1 else 1
       var i = 0
@@ -70,25 +69,21 @@ object LR {
       DataPointArray(a, n.toDouble)
     })
 
-    val pointsScalar = sc.parallelize(1 to N, 1).map(n => {
-      DataPointScalar(n.toDouble)
-    })
-
     // initialize weight vector
+    val ns = scala.math.min(10, D)
     val w1 = new Array[Double](D)
     var i = 0
     while(i < D) {
       w1(i) = 2 * rand.nextDouble - 1
       i = i + 1
     }
-
-    println(w1.mkString("initial: [", ",", "]"))
+    print(w1.slice(0, ns).mkString(s"initial(0-${ns-1}): [", ",", "]\n"))
 
     val v1 = 2 * rand.nextDouble - 1
 
     val w = new Array[Double](D)
 
-    def RDDArray(pointsArray: RDD[DataPointArray]) {
+    def RDDArray(pointsArray: RDD[DataPointArray], iter: Int) {
       for (i <- 0 to D-1)
         w(i) = w1(i)
 
@@ -125,11 +120,11 @@ object LR {
             i = i + 1
           }
       } // iteration ends
-//         println(w.mkString("final: [", ",", "]"))
+      if (iter == 0) { print(w.slice(0, ns).mkString(s"final(0-${ns-1}): [", ",", "]\n")) }
     }
 
 
-    def DatasetArray(pointsArray: Dataset[DataPointArray]) {
+    def DatasetArray(pointsArray: Dataset[DataPointArray], iter: Int) {
       for (i <- 0 to D-1)
         w(i) = w1(i)
 
@@ -151,7 +146,6 @@ object LR {
             }
             a
           })
-/*
           .reduce((a, b) => {
             var i = 0
             while (i < D) {
@@ -160,8 +154,7 @@ object LR {
             }
             a
           })
-*/
-          .agg(sum("value")).head.getAs[scala.collection.mutable.WrappedArray[Double]](0)
+          //.agg(sum("value")).head.getAs[scala.collection.mutable.WrappedArray[Double]](0)
 
         i = 0
         while (i < D) {
@@ -169,7 +162,7 @@ object LR {
           i = i + 1
         }
       } // iteration ends
-//         println(w.mkString("final: [", ",", "]"))
+      if (iter == 0) { print(w.slice(0, ns).mkString(s"final(0-${ns-1}): [", ",", "]\n")) }
     }
 
     ///////////////////////////////
@@ -183,18 +176,117 @@ object LR {
 
     pointsArray.cache().count()
     benchmarkArray.addCase("rddArray cache") { iter =>
-      RDDArray(pointsArray)
+      RDDArray(pointsArray, iter)
     }
 
-
     val dsArray = pointsArray.toDS()
-    dsArray.cache().show()  // probably not needed since RDD was cached already
-
+    dsArray.cache().count()
     benchmarkArray.addCase("datasetArray cache") { iter =>
-      DatasetArray(dsArray)
+      DatasetArray(dsArray, iter)
     }
 
     benchmarkArray.run()
 
+    print(s"\nBenchmark parameters: " +
+      s"N=$N, D=$D, R=$R, ITERATIONS=$ITERATIONS, numSlices=$numSlices\n\n")
+  }
+
+  def run(sqlContext: SQLContext, nslices: Int, n: Int, d: Int, r: Double, iters: Int): Unit = {
+    runBenchmark(sqlContext, nslices, n, d, r, iters)
+  }
+
+}
+
+object LR {
+  val NSLICES = 1
+  val N = 100000 // 1024*1024*15  // Number of data points, orig 10000
+  val D = 100  // Number of dimensions
+  val R = 0.7  // Scaling factor
+  val ITERATIONS = 100
+
+  def main(args: Array[String]): Unit = {
+    val nslices = if (args.length > 0) args(0).toInt else NSLICES
+    val n = if (args.length > 1) args(1).toInt else N
+    val d = if (args.length > 2) args(2).toInt else D
+    val iters = if (args.length > 3) args(3).toInt else ITERATIONS
+    val masterURL = if (args.length > 4) args(4) else "local[1]"
+
+    val conf = new SparkConf()
+    val sc = new SparkContext(masterURL, "LR", conf)
+    val sqlContext = new SQLContext(sc)
+
+    val benchmark = new LR()
+    benchmark.run(sqlContext, nslices, n, d, R, iters)
+
+    showSparkParamters(sqlContext.sparkContext.conf)
+
+    showExecutionEnvironment
+  }
+
+  def showConfigFile(filename: String): Unit = {
+    try {
+      val file = new File(filename)
+      if (file.exists) {
+        print(s"\n--- $filename ---\n")
+        val lines = Source.fromFile(file).getLines
+        lines.foreach(line => {
+          if (line != "" && line.charAt(0) != '#') {
+            print(s"  $line\n")
+          }
+        })
+      }
+    } catch {
+      case e: Exception => print(s"$e\n")
+    }
+  }
+
+  def showSparkParamters(sc: SparkConf): Unit = {
+    print(s"\n=== Show Spark properties ===\n")
+    sc.getAll.map(s => print(s"  ${s._1}: ${s._2}\n"))
+  }
+
+  def showExecutionEnvironment() : Unit = {
+    print(s"\n=== Show execution environment ===\n")
+    try {
+      val pid = System.getProperty("sun.java.launcher.pid")
+      if (pid != null) {
+        val file = new File(s"/proc/$pid/cmdline")
+        if (file.exists) {
+          print(s"\n--- command line options ---\n")
+          val lines = Source.fromFile(file).getLines
+          lines.foreach(line => {
+            if (line != "") {
+              val l = line.replace(0.toChar, ' ')
+              print(s"  $l\n")
+            }
+          })
+        }
+      }
+
+      val sparkhome = sys.env.getOrElse("SPARK_HOME",
+        {
+          print("SPARK_HOME environment is not defined\n")
+          return
+        }
+      )
+      if ((new File(s"$sparkhome/conf").exists)) {
+        showConfigFile(s"$sparkhome/conf/spark-defaults.conf")
+        showConfigFile(s"$sparkhome/conf/spark-env.sh")
+      } else {
+        print(s"Cannot find $sparkhome/conf directory")
+      }
+
+      val commitID = Utils.executeAndGetOutput(
+        Seq("/usr/bin/git", "log", "-n", "1", "--format=%H"),
+        workingDir = new File(sparkhome))
+      print(s"\n--- Commit ID for $sparkhome ---\n  $commitID\n")
+      val files = Utils.executeAndGetOutput(
+        Seq("/usr/bin/git", "status"), workingDir = new File(sparkhome))
+      print(s"\n--- Modified files under $sparkhome ---\n$files\n")
+
+    } catch {
+      case e: Exception => print(s"$e\n")
+    }
+    print(s"\n=== End of show execution environment ===\n")
   }
 }
