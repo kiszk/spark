@@ -145,6 +145,7 @@ class LR extends SparkFunSuite with SharedSQLContext {
             }
             a
           })
+/*
           .reduce((a, b) => {
             var i = 0
             while (i < D) {
@@ -153,7 +154,8 @@ class LR extends SparkFunSuite with SharedSQLContext {
             }
             a
           })
-        //.agg(sum("value")).head.getAs[scala.collection.mutable.WrappedArray[Double]](0)
+*/
+          .agg(sum("value")).head.getAs[scala.collection.mutable.WrappedArray[Double]](0)
 
         i = 0
         while (i < D) {
