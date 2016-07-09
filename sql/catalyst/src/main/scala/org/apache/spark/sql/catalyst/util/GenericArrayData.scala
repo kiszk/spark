@@ -18,6 +18,7 @@
 package org.apache.spark.sql.catalyst.util
 
 import scala.collection.JavaConverters._
+
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.UnsafeArrayData
 import org.apache.spark.sql.types._
