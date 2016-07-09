@@ -56,6 +56,11 @@ private[spark] class Benchmark(
   import Benchmark._
   val benchmarks = mutable.ArrayBuffer.empty[Benchmark.Case]
 
+  override def toString(): String = {
+    s"name=$name, valuesPerIteration=$valuesPerIteration, minNumIters=$minNumIters, " +
+      s"warmupTime=$warmupTime, minTime=$minTime, outputPerIteration=$outputPerIteration"
+  }
+
   val out = if (output.isDefined) {
     new PrintStream(new TeeOutputStream(System.out, output.get))
   } else {
