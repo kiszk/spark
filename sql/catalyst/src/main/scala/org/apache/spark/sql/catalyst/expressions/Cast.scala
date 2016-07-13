@@ -497,7 +497,7 @@ case class Cast(child: Expression, dataType: DataType) extends UnaryExpression w
     if (childNull == "false") {
     s"""
       boolean $resultNull = $childNull;
-      ${ctx.javaType(resultType)} $resultPrim;
+      ${ctx.javaType(resultType)} $resultPrim = ${ctx.defaultValue(resultType)};
       ${cast(childPrim, resultPrim, resultNull)}
     """
     } else {

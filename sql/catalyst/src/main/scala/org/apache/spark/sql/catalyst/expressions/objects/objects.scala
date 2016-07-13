@@ -480,7 +480,7 @@ case class MapObjects private(
       ${genInputData.code}
       ${ctx.javaType(dataType)} ${ev.value} = ${ctx.defaultValue(dataType)};
 
-      if (!${genInputData.isNull}) {
+      if (!(${genInputData.isNull})) {
         $determineCollectionType
         $convertedType[] $convertedArray = null;
         int $dataLength = $getLength;
