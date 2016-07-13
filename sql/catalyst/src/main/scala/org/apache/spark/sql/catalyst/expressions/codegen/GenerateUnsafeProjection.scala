@@ -296,11 +296,7 @@ object GenerateUnsafeProjection extends CodeGenerator[Seq[Expression], UnsafePro
         // Write the numBytes of key array into the first 4 bytes.
         Platform.putInt($bufferHolder.buffer, $tmpCursor - 4, $bufferHolder.cursor - $tmpCursor);
 
-<<<<<<< HEAD
         ${writeArrayToBuffer(ctx, values, valueType, valueContainsNull, bufferHolder)}
-=======
-        ${writeArrayToBuffer(ctx, values, valueType, true, bufferHolder)}
->>>>>>> origin/SPARK-16215
       }
     """
   }
