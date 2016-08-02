@@ -1263,6 +1263,12 @@ class Dataset[T] private[sql](
   @Experimental
   def reduce(func: (T, T) => T): T = rdd.reduce(func)
 
+  def reduce(expr: Column, encoder: Encoder[T], func: (T, T) => T): T = {
+    val df = groupBy().agg(expr)
+    val ds = df.as(encoder)
+    ds.rdd.reduceMerge(func)
+  }
+
   /**
    * :: Experimental ::
    * (Java-specific)

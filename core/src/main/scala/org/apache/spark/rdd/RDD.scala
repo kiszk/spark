@@ -981,6 +981,29 @@ abstract class RDD[T: ClassTag](
     jobResult.getOrElse(throw new UnsupportedOperationException("empty collection"))
   }
 
+  def reduceMerge(f: (T, T) => T): T = withScope {
+    val cleanF = sc.clean(f)
+    val reducePartition: Iterator[T] => Option[T] = iter => {
+      if (iter.hasNext) {
+        Some(iter.next)
+      } else {
+        None
+      }
+    }
+    var jobResult: Option[T] = None
+    val mergeResult = (index: Int, taskResult: Option[T]) => {
+      if (taskResult.isDefined) {
+        jobResult = jobResult match {
+          case Some(value) => Some(f(value, taskResult.get))
+          case None => taskResult
+        }
+      }
+    }
+    sc.runJob(this, reducePartition, mergeResult)
+    // Get the final result out of our Option, or throw an exception if the RDD was empty
+    jobResult.getOrElse(throw new UnsupportedOperationException("empty collection"))
+  }
+
   /**
    * Reduces the elements of this RDD in a multi-level tree pattern.
    *

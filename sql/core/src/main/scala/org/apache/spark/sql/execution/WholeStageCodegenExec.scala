@@ -139,7 +139,11 @@ trait CodegenSupport extends SparkPlan {
         // generate the code to create a UnsafeRow
         ctx.INPUT_ROW = row
         ctx.currentVars = outputVars
-        val ev = GenerateUnsafeProjection.createCode(ctx, colExprs, false)
+        val ev = if (!WholeStageCodegenExec.useSafeProjection) {
+          GenerateUnsafeProjection.createCode(ctx, colExprs, false)
+        } else {
+          GenerateSafeProjection.createCode(ctx, colExprs, false)
+        }
         val code = s"""
           |$evaluateInputs
           |${ev.code.trim}
@@ -272,6 +276,7 @@ case class InputAdapter(child: SparkPlan) extends UnaryExecNode with CodegenSupp
 
 object WholeStageCodegenExec {
   val PIPELINE_DURATION_METRIC = "duration"
+  var useSafeProjection = false
 }
 
 /**
@@ -308,6 +313,15 @@ case class WholeStageCodegenExec(child: SparkPlan) extends UnaryExecNode with Co
   override def outputPartitioning: Partitioning = child.outputPartitioning
   override def outputOrdering: Seq[SortOrder] = child.outputOrdering
 
+  val useSafeProjection: Boolean = {
+    if (child.output.length == 1) {
+      val dt = child.output.head.dataType
+      dt.isInstanceOf[ObjectType]
+    } else {
+      false
+    }
+  }
+
   override private[sql] lazy val metrics = Map(
     "pipelineTime" -> SQLMetrics.createTimingMetric(sparkContext,
       WholeStageCodegenExec.PIPELINE_DURATION_METRIC))
@@ -322,6 +336,7 @@ case class WholeStageCodegenExec(child: SparkPlan) extends UnaryExecNode with Co
   def doCodeGen(): (CodegenContext, CodeAndComment) = {
     val ctx = new CodegenContext
     ctx.isRow = true
+    WholeStageCodegenExec.useSafeProjection = useSafeProjection
     val codeRow = child.asInstanceOf[CodegenSupport].produce(ctx, this)
 
     enableColumnCodeGen = InMemoryTableScanExec.enableColumnCodeGen(sqlContext, ctx, child)
@@ -344,10 +359,17 @@ case class WholeStageCodegenExec(child: SparkPlan) extends UnaryExecNode with Co
       final class GeneratedIterator extends org.apache.spark.sql.execution.BufferedRowIterator {
 
         private Object[] references;
+        private MutableRow mutableRow;
         ${ctx.declareMutableStates()}
 
         public GeneratedIterator(Object[] references) {
           this.references = references;
+          if (references.length > 1) {
+            Object obj = references[references.length - 1];
+            if (obj instanceof MutableRow) {
+              mutableRow = (MutableRow) obj;
+            }
+          }
         }
 
         public void init(int index, scala.collection.Iterator inputs[]) {
@@ -389,7 +411,12 @@ case class WholeStageCodegenExec(child: SparkPlan) extends UnaryExecNode with Co
     if (rdds.length == 1) {
       rdds.head.mapPartitionsWithIndex { (index, iter) =>
         val clazz = CodeGenerator.compile(cleanedSource)
-        val buffer = clazz.generate(references).asInstanceOf[BufferedRowIterator]
+        val buffer = if (useSafeProjection) {
+          val resultRow = new SpecificMutableRow(Seq(ObjectType(classOf[Array[Double]])))
+          clazz.generate(references :+ resultRow).asInstanceOf[BufferedRowIterator]
+        } else {
+          clazz.generate(references).asInstanceOf[BufferedRowIterator]
+        }
         buffer.init(index, Array(iter))
         new Iterator[InternalRow] {
           override def hasNext: Boolean = {
@@ -503,8 +530,8 @@ case class CollapseCodegenStages(conf: SQLConf) extends Rule[SparkPlan] {
   private def insertWholeStageCodegen(plan: SparkPlan): SparkPlan = plan match {
     // For operators that will output domain object, do not insert WholeStageCodegen for it as
     // domain object can not be written into unsafe row.
-    case plan if plan.output.length == 1 && plan.output.head.dataType.isInstanceOf[ObjectType] =>
-      plan.withNewChildren(plan.children.map(insertWholeStageCodegen))
+//    case plan if plan.output.length == 1 && plan.output.head.dataType.isInstanceOf[ObjectType] =>
+//      plan.withNewChildren(plan.children.map(insertWholeStageCodegen))
     case plan: CodegenSupport if supportCodegen(plan) =>
       WholeStageCodegenExec(insertInputAdapter(plan))
     case other =>
