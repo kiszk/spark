@@ -155,13 +155,21 @@ class LR extends SparkFunSuite with SharedSQLContext {
             a
           })
 */
-          .agg(sum("value")).head.getAs[scala.collection.mutable.WrappedArray[Double]](0)
+//          .agg(sum("value")).head.getAs[scala.collection.mutable.WrappedArray[Double]](0)
+          .reduce(usum("value"), newDoubleArrayEncoder, (a, b) => {
+            var i = 0
+            while (i < D) {
+              a(i) = a(i) + b(i)
+              i = i + 1
+            }
+            a
+          })
 
         i = 0
         while (i < D) {
           w(i) = w(i) - gradient(i)
           i = i + 1
-        }
+       } 
       } // iteration ends
       if (iter == 0) { print(w.slice(0, ns).mkString(s"final(0-${ns-1}): [", ",", "]\n")) }
     }
@@ -222,6 +230,8 @@ object LR {
     showSparkParamters(sqlContext.sparkContext.conf)
 
     showExecutionEnvironment
+
+    sc.stop
   }
 
   def showConfigFile(filename: String): Unit = {

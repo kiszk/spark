@@ -610,6 +610,7 @@ object functions {
    * @since 1.3.0
    */
   def sum(e: Column): Column = withAggregateFunction { Sum(e.expr) }
+  def usum(e: Column): Column = withAggregateFunction { USum(e.expr) }
 
   /**
    * Aggregate function: returns the sum of all values in the given column.
@@ -618,6 +619,7 @@ object functions {
    * @since 1.3.0
    */
   def sum(columnName: String): Column = sum(Column(columnName))
+  def usum(columnName: String): Column = usum(Column(columnName))
 
   /**
    * Aggregate function: returns the sum of distinct values in the expression.

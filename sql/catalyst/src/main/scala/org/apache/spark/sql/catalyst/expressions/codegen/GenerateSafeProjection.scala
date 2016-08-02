@@ -137,6 +137,37 @@ object GenerateSafeProjection extends CodeGenerator[Seq[Expression], Projection]
     case _ => ExprCode("", "false", input)
   }
 
+  def createCode(
+      ctx: CodegenContext,
+      expressions: Seq[Expression],
+      useSubexprElimination: Boolean = false): ExprCode = {
+    val exprEvals = ctx.generateExpressions(expressions, useSubexprElimination)
+    val exprTypes = expressions.map(_.dataType)
+
+    val expressionCodes = exprEvals.zipWithIndex.map {
+      case (exprEval, i) =>
+        exprEval.code +
+          s"""
+            if (${exprEval.isNull}) {
+              mutableRow.setNullAt($i);
+            } else {
+              ${ctx.setColumn("mutableRow", exprTypes(i), i, exprEval.value)};
+            }
+          """
+    }
+    val allExpressions = ctx.splitExpressions(ctx.INPUT_ROW, expressionCodes)
+
+    // Evaluate all the subexpression.
+    val evalSubexpr = ctx.subexprFunctions.mkString("\n")
+
+    val code =
+      s"""
+        $evalSubexpr
+        $allExpressions
+      """
+    ExprCode(code, "false", "mutableRow")
+  }
+
   protected def create(expressions: Seq[Expression]): Projection = {
     val ctx = newCodeGenContext()
     val expressionCodes = expressions.zipWithIndex.map {

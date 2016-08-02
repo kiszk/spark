@@ -94,13 +94,22 @@ object AggUtils {
       groupingAttributes ++
         partialAggregateExpressions.flatMap(_.aggregateFunction.inputAggBufferAttributes)
 
+    val updateOnly = {
+      if (aggregateExpressions.length == 1) {
+        val aggFunc = aggregateExpressions(0).aggregateFunction
+        aggFunc.isInstanceOf[USum]
+      } else {
+        false
+      }
+    }
+
     val partialAggregate = createAggregate(
         requiredChildDistributionExpressions = None,
         groupingExpressions = groupingExpressions,
         aggregateExpressions = partialAggregateExpressions,
         aggregateAttributes = partialAggregateAttributes,
         initialInputBufferOffset = 0,
-        resultExpressions = partialResultExpressions,
+        resultExpressions = if (!updateOnly) partialResultExpressions else resultExpressions,
         child = child)
 
     // 2. Create an Aggregate Operator for final aggregations.
@@ -108,8 +117,8 @@ object AggUtils {
     // The attributes of the final aggregation buffer, which is presented as input to the result
     // projection:
     val finalAggregateAttributes = finalAggregateExpressions.map(_.resultAttribute)
-
-    val finalAggregate = createAggregate(
+    val finalAggregate = if (!updateOnly) {
+      createAggregate(
         requiredChildDistributionExpressions = Some(groupingAttributes),
         groupingExpressions = groupingAttributes,
         aggregateExpressions = finalAggregateExpressions,
@@ -117,7 +126,9 @@ object AggUtils {
         initialInputBufferOffset = groupingExpressions.length,
         resultExpressions = resultExpressions,
         child = partialAggregate)
-
+    } else {
+      partialAggregate
+    }
     finalAggregate :: Nil
   }
 

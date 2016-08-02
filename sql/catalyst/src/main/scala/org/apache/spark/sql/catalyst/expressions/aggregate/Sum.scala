@@ -24,7 +24,8 @@ import org.apache.spark.sql.types._
 
 @ExpressionDescription(
   usage = "_FUNC_(x) - Returns the sum calculated from values of a group.")
-case class Sum(child: Expression) extends DeclarativeAggregate {
+abstract class AbstractSum extends DeclarativeAggregate {
+  def child: Expression
 
   override def children: Seq[Expression] = child :: Nil
 
@@ -104,3 +105,6 @@ case class Sum(child: Expression) extends DeclarativeAggregate {
 
   override lazy val evaluateExpression: Expression = sum
 }
+
+case class Sum(child: Expression) extends AbstractSum
+case class USum(child: Expression) extends AbstractSum
