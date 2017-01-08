@@ -118,10 +118,7 @@ class GenericArrayData(val array: Array[Any],
 
   override def toBooleanArray(): Array[Boolean] = {
     if (booleanArray != null) {
-      val len = booleanArray.length
-      val array = new Array[Boolean](len)
-      System.arraycopy(booleanArray, 0, array, 0, len)
-      array
+      booleanArray
     } else {
       super.toBooleanArray
     }
@@ -129,10 +126,7 @@ class GenericArrayData(val array: Array[Any],
 
   override def toByteArray(): Array[Byte] = {
     if (byteArray != null) {
-      val len = byteArray.length
-      val array = new Array[Byte](len)
-      System.arraycopy(byteArray, 0, array, 0, len)
-      array
+      byteArray
     } else {
       super.toByteArray
     }
@@ -140,10 +134,7 @@ class GenericArrayData(val array: Array[Any],
 
   override def toShortArray(): Array[Short] = {
     if (shortArray != null) {
-      val len = shortArray.length
-      val array = new Array[Short](len)
-      System.arraycopy(shortArray, 0, array, 0, len)
-      array
+      shortArray
     } else {
       super.toShortArray
     }
@@ -151,10 +142,7 @@ class GenericArrayData(val array: Array[Any],
 
   override def toIntArray(): Array[Int] = {
     if (intArray != null) {
-      val len = intArray.length
-      val array = new Array[Int](len)
-      System.arraycopy(intArray, 0, array, 0, len)
-      array
+      intArray
     } else {
       super.toIntArray
     }
@@ -162,10 +150,7 @@ class GenericArrayData(val array: Array[Any],
 
   override def toLongArray(): Array[Long] = {
     if (longArray != null) {
-      val len = longArray.length
-      val array = new Array[Long](len)
-      System.arraycopy(longArray, 0, array, 0, len)
-      array
+      longArray
     } else {
       super.toLongArray
     }
@@ -173,10 +158,7 @@ class GenericArrayData(val array: Array[Any],
 
   override def toFloatArray(): Array[Float] = {
     if (floatArray != null) {
-      val len = floatArray.length
-      val array = new Array[Float](len)
-      System.arraycopy(floatArray, 0, array, 0, len)
-      array
+      floatArray
     } else {
       super.toFloatArray
     }
@@ -184,10 +166,7 @@ class GenericArrayData(val array: Array[Any],
 
   override def toDoubleArray(): Array[Double] = {
     if (doubleArray != null) {
-      val len = doubleArray.length
-      val array = new Array[Double](len)
-      System.arraycopy(doubleArray, 0, array, 0, len)
-      array
+      doubleArray
     } else {
       super.toDoubleArray
     }
