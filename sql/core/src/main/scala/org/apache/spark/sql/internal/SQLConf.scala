@@ -450,17 +450,7 @@ object SQLConf {
     .booleanConf
     .createWithDefault(true)
 
-<<<<<<< 9eeeace850916cb26bd6de5644bad48d91a7a205
-  val CLOSURE_CONVERTER_ENABLED = buildConf("spark.sql.closure.convertToExprs")
-    .internal()
-    .doc("TODO: Need to write")
-    .booleanConf
-    .createWithDefault(false)
-
   val WHOLESTAGE_CODEGEN_ENABLED = buildConf("spark.sql.codegen.wholeStage")
-=======
-  val WHOLESTAGE_CODEGEN_ENABLED = SQLConfigBuilder("spark.sql.codegen.wholeStage")
->>>>>>> Add closure conversion rules in Analyzer
     .internal()
     .doc("When true, the whole stage (of multiple operators) will be compiled into single java" +
       " method.")

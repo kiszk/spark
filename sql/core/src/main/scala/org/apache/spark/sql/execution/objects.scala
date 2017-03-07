@@ -253,7 +253,7 @@ case class MapElementsExec(
 case class MapExprElementsExec(
     mapExpr: Expression,
     outputObjAttr: Attribute,
-    child: SparkPlan) extends UnaryExecNode with ObjectOperator with CodegenSupport {
+    child: SparkPlan) extends UnaryExecNode with CodegenSupport {
 
   override def output: Seq[Attribute] = outputObjAttr :: Nil
   override def producedAttributes: AttributeSet = AttributeSet(outputObjAttr)
@@ -275,8 +275,8 @@ case class MapExprElementsExec(
   override protected def doExecute(): RDD[InternalRow] = {
     child.execute().mapPartitionsInternal { iter =>
       val projection = new InterpretedProjection(mapExpr :: Nil, child.output)
-      val getObject = unwrapObjectFromRow(child.output.head.dataType)
-      val outputObject = wrapObjectToRow(outputObjAttr.dataType)
+      val getObject = ObjectOperator.unwrapObjectFromRow(child.output.head.dataType)
+      val outputObject = ObjectOperator.wrapObjectToRow(outputObjAttr.dataType)
       iter.map(row => {
         outputObject(getObject(projection(row)))
       })

@@ -29,7 +29,7 @@ class ClosureToExpressionConverterBenchmark extends SparkFunSuite {
   val testSchema = ExpressionEncoder[RowType]().schema
 
   def doMicroBenchmark(numIters: Int): Benchmark = {
-    val benchmark = new Benchmark("closure-to-exprs benchmarks", 1L, defaultNumIters = numIters)
+    val benchmark = new Benchmark("closure-to-exprs benchmarks", 1L, minNumIters = numIters)
 
     benchmark.addCase("boolean") { iter =>
       ClosureToExpressionConverter.convert(

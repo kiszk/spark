@@ -172,14 +172,14 @@ class Analyzer(
     def apply(plan: LogicalPlan): LogicalPlan = {
       if (conf.closureToExprConverter) {
         plan transform {
-          case SerializeFromObject(_, f @ Filter(condition @ Invoke(func: Literal, _, _, _, _),
+          case SerializeFromObject(_, f @ Filter(condition @ Invoke(func: Literal, _, _, _, _, _),
               DeserializeToObject(_, _, child))) =>
             ClosureToExpressionConverter.convertFilter(
               func.value.asInstanceOf[Object], child.schema).map { expr =>
               f.copy(condition = expr, child = child)
             }.getOrElse(f)
 
-          case m @ MapElements(func, outputObjAttr, DeserializeToObject(_, _, child)) =>
+          case m @ MapElements(func, _, _, outputObjAttr, DeserializeToObject(_, _, child)) =>
             ClosureToExpressionConverter.convertMap(func, child.schema).map { expr =>
               MapExprElements(expr, outputObjAttr, child)
             }.getOrElse(m)
@@ -744,7 +744,7 @@ class Analyzer(
     def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperators {
       case p: LogicalPlan if !p.childrenResolved => p
 
-      case m @ MapElements(mapExpr: Expression, _, child) if !mapExpr.resolved =>
+      case m @ MapElements(mapExpr: Expression, _, _, _, child) if !mapExpr.resolved =>
         m.copy(func = resolveExpression(mapExpr, child))
 
       // If the projection list contains Stars, expand it.
