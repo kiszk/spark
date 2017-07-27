@@ -65,6 +65,11 @@ trait FileFormat {
   }
 
   /**
+   * Hold concrete class of ColumnVector in ColumnarBatch if supportBatch is true
+   */
+  val columnVectorInstance: Class[_] = null
+
+  /**
    * Returns whether a file with `path` could be splitted or not.
    */
   def isSplitable(

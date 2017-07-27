@@ -31,6 +31,8 @@ import org.apache.spark.sql.types.DataType
  */
 private[sql] trait ColumnarBatchScan extends CodegenSupport {
 
+  val columnVectorInstance: Class[_] = null
+
   val inMemoryTableScan: InMemoryTableScanExec = null
 
   override lazy val metrics = Map(
@@ -83,13 +85,13 @@ private[sql] trait ColumnarBatchScan extends CodegenSupport {
     val batch = ctx.freshName("batch")
     ctx.addMutableState(columnarBatchClz, batch, s"$batch = null;")
 
-    val columnVectorClz = "org.apache.spark.sql.execution.vectorized.ColumnVector"
+    val columnVectorClz = columnVectorInstance.getName
     val idx = ctx.freshName("batchIdx")
     ctx.addMutableState("int", idx, s"$idx = 0;")
     val colVars = output.indices.map(i => ctx.freshName("colInstance" + i))
     val columnAssigns = colVars.zipWithIndex.map { case (name, i) =>
       ctx.addMutableState(columnVectorClz, name, s"$name = null;")
-      s"$name = $batch.column($i);"
+      s"$name = ($columnVectorClz)($batch.column($i));"
     }
 
     val nextBatch = ctx.freshName("nextBatch")

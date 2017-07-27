@@ -272,6 +272,9 @@ class ParquetFileFormat
       schema.forall(_.dataType.isInstanceOf[AtomicType])
   }
 
+  override val columnVectorInstance: Class[_] =
+    classOf[org.apache.spark.sql.execution.vectorized.OnHeapColumnVector]
+
   override def isSplitable(
       sparkSession: SparkSession,
       options: Map[String, String],

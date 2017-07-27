@@ -168,6 +168,8 @@ case class FileSourceScanExec(
   val supportsBatch: Boolean = relation.fileFormat.supportBatch(
     relation.sparkSession, StructType.fromAttributes(output))
 
+  override val columnVectorInstance: Class[_] = relation.fileFormat.columnVectorInstance
+
   val needsUnsafeRowConversion: Boolean = if (relation.fileFormat.isInstanceOf[ParquetSource]) {
     SparkSession.getActiveSession.get.sessionState.conf.parquetVectorizedReaderEnabled
   } else {
