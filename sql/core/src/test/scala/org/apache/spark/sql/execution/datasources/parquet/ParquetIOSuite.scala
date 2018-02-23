@@ -774,6 +774,38 @@ class ParquetIOSuite extends QueryTest with ParquetTest with SharedSQLContext {
     }
   }
 
+  test("VectorizedParquetRecordReader - booleans") {
+    withTempPath { dir =>
+      val inputData =
+        Array(true, false, true, false, false, true, false, true, true, true, false, false)
+      inputData.toSeq.toDF().repartition(1).write.parquet(dir.getCanonicalPath)
+
+      val dataType = BooleanType
+      val schema = StructType(StructField("col", dataType) :: Nil)
+      val conf = sqlContext.conf
+      val vectorizedReader = new VectorizedParquetRecordReader(
+        null, conf.offHeapColumnVectorEnabled, conf.parquetVectorizedReaderBatchSize)
+      val file = SpecificParquetRecordReaderBase.listDirectory(dir).get(0)
+
+      try {
+        vectorizedReader.initialize(file, null)
+
+        var i: Int = 0
+        while (vectorizedReader.nextKeyValue()) {
+          val row = vectorizedReader.getCurrentValue.asInstanceOf[InternalRow]
+
+          // Use `GenericMutableRow` by explicitly copying rather than `ColumnarBatch`
+          // in order to use get(...) method which is not implemented in `ColumnarBatch`.
+          val actual = row.get(0, dataType)
+          val expected = inputData(i)
+          i += 1
+        }
+      } finally {
+        vectorizedReader.close()
+      }
+    }
+  }
+
   test("SPARK-18433: Improve DataSource option keys to be more case-insensitive") {
     withSQLConf(SQLConf.PARQUET_COMPRESSION.key -> "snappy") {
       val option = new ParquetOptions(Map("Compression" -> "uncompressed"), spark.sessionState.conf)

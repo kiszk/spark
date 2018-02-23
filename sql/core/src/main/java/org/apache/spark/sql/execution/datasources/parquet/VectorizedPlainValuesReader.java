@@ -33,6 +33,7 @@ public class VectorizedPlainValuesReader extends ValuesReader implements Vectori
   private byte[] buffer;
   private int offset;
   private int bitOffset; // Only used for booleans.
+  private byte booleanData;
   private ByteBuffer byteBuffer; // used to wrap the byte array buffer
 
   private static final boolean bigEndianPlatform =
@@ -57,9 +58,32 @@ public class VectorizedPlainValuesReader extends ValuesReader implements Vectori
 
   @Override
   public final void readBooleans(int total, WritableColumnVector c, int rowId) {
-    // TODO: properly vectorize this
-    for (int i = 0; i < total; i++) {
-      c.putBoolean(rowId + i, readBoolean());
+    int index = 0;
+    if (total >= 8 && ((bitOffset % 8) == 0)) {
+      for (; index + 8 <= total; index += 8) {
+        byte b = Platform.getByte(buffer, offset);
+        boolean b0 = (b & 0x01) != 0;
+        boolean b1 = (b & 0x02) != 0;
+        boolean b2 = (b & 0x04) != 0;
+        boolean b3 = (b & 0x08) != 0;
+        boolean b4 = (b & 0x10) != 0;
+        boolean b5 = (b & 0x20) != 0;
+        boolean b6 = (b & 0x40) != 0;
+        boolean b7 = (b & 0x80) != 0;
+        int row = rowId + index;
+        c.putBoolean(row, b0);
+        c.putBoolean(row + 1, b1);
+        c.putBoolean(row + 2, b2);
+        c.putBoolean(row + 3, b3);
+        c.putBoolean(row + 4, b4);
+        c.putBoolean(row + 5, b5);
+        c.putBoolean(row + 6, b6);
+        c.putBoolean(row + 7, b7);
+        offset++;
+      }
+    }
+    for (; index < total; index++) {
+      c.putBoolean(rowId + index, readBoolean());
     }
   }
 
@@ -99,13 +123,13 @@ public class VectorizedPlainValuesReader extends ValuesReader implements Vectori
 
   @Override
   public final boolean readBoolean() {
-    byte b = Platform.getByte(buffer, offset);
-    boolean v = (b & (1 << bitOffset)) != 0;
-    bitOffset += 1;
-    if (bitOffset == 8) {
+    if ((bitOffset % 8) == 0) {
+      booleanData = Platform.getByte(buffer, offset);
       bitOffset = 0;
       offset++;
     }
+    boolean v = (booleanData & (1 << bitOffset)) != 0;
+    bitOffset++;
     return v;
   }
 
