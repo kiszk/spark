@@ -31,7 +31,6 @@ import org.apache.spark.sql.test.SharedSparkSession
 import org.apache.spark.sql.test.SQLTestData._
 import org.apache.spark.sql.types._
 import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.util.Utils
 
 class InMemoryColumnarQuerySuite extends QueryTest with SharedSparkSession {
   import testImplicits._
@@ -544,5 +543,11 @@ class InMemoryColumnarQuerySuite extends QueryTest with SharedSparkSession {
         }
       }
     }
+  }
+
+  test("SPARK-23819: Complex type pruning should utilize proper statistics") {
+    val df = Seq((Array(1), (1, 1))).toDF("arr", "struct").cache()
+    assert(df.where("arr <=> array(1)").count() === 1)
+    assert(df.where("struct <=> named_struct('_1', 1, '_2', 1)").count() === 1)
   }
 }
